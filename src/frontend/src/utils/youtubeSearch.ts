@@ -1,4 +1,6 @@
-export const YOUTUBE_API_KEY = "AIzaSyCTDSCrIjmZa3lQ92A0WPfm_YH5TeKeMUE";
+const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as
+  | string
+  | undefined;
 
 export interface YouTubeItem {
   id: { videoId: string };
@@ -10,10 +12,17 @@ export interface YouTubeItem {
 }
 
 export async function searchYouTube(q: string): Promise<YouTubeItem[]> {
+  if (!YOUTUBE_API_KEY) {
+    throw new Error("API key not configured");
+  }
+
   console.log("[searchYouTube] Called with query:", q);
 
   const url = `https://youtube.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=5&key=${YOUTUBE_API_KEY}`;
-  console.log("[searchYouTube] Fetching URL:", url);
+  console.log(
+    "[searchYouTube] Fetching URL (key hidden):",
+    url.replace(YOUTUBE_API_KEY, "[HIDDEN]"),
+  );
 
   let res: Response;
   try {
@@ -28,7 +37,6 @@ export async function searchYouTube(q: string): Promise<YouTubeItem[]> {
   console.log("[searchYouTube] Response status:", res.status);
 
   const data = await res.json();
-  console.log("[searchYouTube] Response data:", data);
 
   if (data.error) {
     const msg = data.error.message || "YouTube API error";

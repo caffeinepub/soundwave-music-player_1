@@ -64,7 +64,7 @@ export default function App() {
       <MainContent
         activeView={activeView}
         songs={songs}
-        currentIdx={player.currentIdx}
+        currentSongId={player.currentSong?.id ?? null}
         isPlaying={player.isPlaying}
         likedIds={player.likedIds}
         recentIds={player.recentIds}
@@ -117,8 +117,14 @@ export default function App() {
         isOpen={isQueueOpen}
         songs={songs}
         currentIdx={player.currentIdx}
+        ytQueue={player.ytQueue}
+        ytQueueIdx={player.ytQueueIdx}
+        currentSong={player.currentSong}
         onClose={() => setIsQueueOpen(false)}
         onPlayTrack={player.playTrack}
+        onPlayYT={(song) => {
+          if (song.youtubeId) player.playYT(song.youtubeId, song.title);
+        }}
       />
 
       <Toast message={player.toastMsg} visible={player.toastMsg !== ""} />

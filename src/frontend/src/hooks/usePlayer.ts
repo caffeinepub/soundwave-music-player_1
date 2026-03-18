@@ -57,15 +57,17 @@ export interface PlayerState {
   isShuffle: boolean;
   repeatMode: RepeatMode;
   volume: number;
-  progress: number; // 0-1
-  currentTime: number; // seconds
-  duration: number; // seconds
+  progress: number;
+  currentTime: number;
+  duration: number;
   likedIds: Set<string>;
-  recentIds: number[]; // indices into songs array
+  recentIds: number[];
   toastMsg: string;
   isCurrentLiked: boolean;
   currentSong: Song | null;
   currentMode: "local" | "youtube";
+  ytQueue: Song[];
+  ytQueueIdx: number;
   showToast: (msg: string) => void;
   playTrack: (idx: number) => void;
   playExternalSong: (song: Song) => void;
@@ -79,6 +81,7 @@ export interface PlayerState {
   seek: (pct: number) => void;
   setVolume: (v: number) => void;
   toggleMute: () => void;
+  clearYtQueue: () => void;
 }
 
 const LS_LIKED = "sw_liked";
@@ -116,6 +119,20 @@ export function usePlayer(): PlayerState {
   const [toastVisible, setToastVisible] = useState(false);
   const [currentMode, setCurrentMode] = useState<"local" | "youtube">("local");
 
+  // ── YouTube queue (for search results navigation & auto-advance) ──────────
+  const [ytQueue, setYtQueue] = useState<Song[]>([]);
+  const [ytQueueIdx, setYtQueueIdx] = useState(-1);
+  const ytQueueRef = useRef<Song[]>([]);
+  const ytQueueIdxRef = useRef(-1);
+
+  // keep refs in sync
+  useEffect(() => {
+    ytQueueRef.current = ytQueue;
+  }, [ytQueue]);
+  useEffect(() => {
+    ytQueueIdxRef.current = ytQueueIdx;
+  }, [ytQueueIdx]);
+
   // HTML5 Audio for local SoundHelix tracks
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // YouTube IFrame Player instance
@@ -123,6 +140,8 @@ export function usePlayer(): PlayerState {
   const ytReadyRef = useRef(false);
   // Track which player is currently active
   const activePlayerRef = useRef<"html5" | "youtube">("html5");
+  // Pending video to load once YT player is ready
+  const pendingYtVideoRef = useRef<string | null>(null);
 
   // Progress polling interval for YouTube (no native events)
   const ytIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -147,18 +166,78 @@ export function usePlayer(): PlayerState {
     toastTimerRef.current = setTimeout(() => setToastVisible(false), 2000);
   }, []);
 
+  // ── Internal helper: play a YouTube Song from the ytQueue ─────────────────
+  const playYtQueueItem = useCallback((song: Song) => {
+    if (!song.youtubeId) return;
+    activePlayerRef.current = "youtube";
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.src = "";
+    }
+    if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+    setCurrentMode("youtube");
+    setExternalSong(song);
+    setCurrentIdx(-1);
+    setProgress(0);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(true);
+
+    const loadVideo = () => {
+      const yt = ytPlayerRef.current;
+      if (!yt) return;
+      yt.loadVideoById(song.youtubeId as string);
+      yt.setVolume(Math.round(volumeRef.current * 100));
+    };
+
+    if (ytReadyRef.current && ytPlayerRef.current) {
+      loadVideo();
+    } else {
+      pendingYtVideoRef.current = song.youtubeId;
+    }
+  }, []);
+
   // ── Helper: advance to next/handle repeat ──────────────────────────────────
   const handleTrackEnd = useCallback(() => {
     const rm = repeatRef.current;
     const sh = shuffleRef.current;
     const idx = currentIdxRef.current;
 
-    // If external song was playing, just stop
+    // If an external YouTube song was playing, try to advance in ytQueue
     if (externalSongRef.current !== null) {
-      setExternalSong(null);
-      setIsPlaying(false);
-      setProgress(0);
-      setCurrentTime(0);
+      const queue = ytQueueRef.current;
+      const qIdx = ytQueueIdxRef.current;
+
+      if (rm === "one" && externalSongRef.current.youtubeId) {
+        // repeat single: replay same
+        const yt = ytPlayerRef.current;
+        if (yt) yt.loadVideoById(externalSongRef.current.youtubeId);
+        setProgress(0);
+        setCurrentTime(0);
+        setIsPlaying(true);
+        return;
+      }
+
+      const nextQIdx = qIdx + 1;
+      if (nextQIdx < queue.length) {
+        // advance to next in ytQueue
+        const nextSong = queue[nextQIdx];
+        setYtQueueIdx(nextQIdx);
+        ytQueueIdxRef.current = nextQIdx;
+        playYtQueueItem(nextSong);
+      } else if (rm === "all" && queue.length > 0) {
+        // loop back to start
+        setYtQueueIdx(0);
+        ytQueueIdxRef.current = 0;
+        playYtQueueItem(queue[0]);
+      } else {
+        // end of queue, stop
+        setExternalSong(null);
+        setIsPlaying(false);
+        setProgress(0);
+        setCurrentTime(0);
+      }
       return;
     }
 
@@ -179,8 +258,7 @@ export function usePlayer(): PlayerState {
         setCurrentTime(0);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [playYtQueueItem]);
 
   // Forward ref so handleTrackEnd can call playTrackInternal without circular dep
   const playTrackInternalRef = useRef<(idx: number) => void>(() => {});
@@ -231,6 +309,11 @@ export function usePlayer(): PlayerState {
           onReady: () => {
             ytReadyRef.current = true;
             ytPlayerRef.current?.setVolume(Math.round(volumeRef.current * 100));
+            // Play any pending video that was queued before player was ready
+            if (pendingYtVideoRef.current) {
+              ytPlayerRef.current?.loadVideoById(pendingYtVideoRef.current);
+              pendingYtVideoRef.current = null;
+            }
           },
           onStateChange: (event) => {
             if (!window.YT) return;
@@ -292,163 +375,135 @@ export function usePlayer(): PlayerState {
   }, [handleTrackEnd]);
 
   // ── Core play logic ────────────────────────────────────────────────────────
-  const playTrackInternal = useCallback(
-    (idx: number) => {
-      if (idx < 0 || idx >= songs.length) return;
-      const song = songs[idx];
+  const playTrackInternal = useCallback((idx: number) => {
+    if (idx < 0 || idx >= songs.length) return;
+    const song = songs[idx];
 
-      setCurrentIdx(idx);
-      setExternalSong(null);
-      setProgress(0);
-      setCurrentTime(0);
+    setCurrentIdx(idx);
+    setExternalSong(null);
+    setProgress(0);
+    setCurrentTime(0);
 
-      // Auto-switch mode silently based on song type
-      setCurrentMode(song.youtubeId ? "youtube" : "local");
+    // Auto-switch mode silently based on song type
+    setCurrentMode(song.youtubeId ? "youtube" : "local");
 
-      setRecentIds((prev) => {
-        const next = [idx, ...prev.filter((x) => x !== idx)].slice(0, 8);
-        localStorage.setItem(LS_RECENT, JSON.stringify(next));
-        return next;
-      });
+    setRecentIds((prev) => {
+      const next = [idx, ...prev.filter((x) => x !== idx)].slice(0, 8);
+      localStorage.setItem(LS_RECENT, JSON.stringify(next));
+      return next;
+    });
 
-      if (song.youtubeId) {
-        activePlayerRef.current = "youtube";
-        const audio = audioRef.current;
-        if (audio) {
-          audio.pause();
-          audio.src = "";
-        }
-        if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-
-        const loadYT = () => {
-          const yt = ytPlayerRef.current;
-          if (!yt) return;
-          yt.loadVideoById(song.youtubeId as string);
-          yt.setVolume(Math.round(volumeRef.current * 100));
-        };
-
-        if (ytReadyRef.current && ytPlayerRef.current) {
-          loadYT();
-        } else {
-          const prev = window.onYouTubeIframeAPIReady;
-          window.onYouTubeIframeAPIReady = () => {
-            if (prev) prev();
-            setTimeout(loadYT, 200);
-          };
-        }
-
-        setDuration(song.duration);
-        setIsPlaying(true);
-      } else {
-        activePlayerRef.current = "html5";
-        if (ytPlayerRef.current && ytReadyRef.current) {
-          try {
-            ytPlayerRef.current.stopVideo();
-          } catch (_) {}
-        }
-        if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-
-        const audio = audioRef.current;
-        if (!audio) return;
-        audio.src = song.src;
-        audio.load();
-        audio.volume = volumeRef.current;
-        audio
-          .play()
-          .then(() => setIsPlaying(true))
-          .catch(() => setIsPlaying(false));
-
-        setDuration(song.duration);
+    if (song.youtubeId) {
+      activePlayerRef.current = "youtube";
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.src = "";
       }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+      if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+
+      const loadYT = () => {
+        const yt = ytPlayerRef.current;
+        if (!yt) return;
+        yt.loadVideoById(song.youtubeId as string);
+        yt.setVolume(Math.round(volumeRef.current * 100));
+      };
+
+      if (ytReadyRef.current && ytPlayerRef.current) {
+        loadYT();
+      } else {
+        pendingYtVideoRef.current = song.youtubeId;
+      }
+
+      setDuration(song.duration);
+      setIsPlaying(true);
+    } else {
+      activePlayerRef.current = "html5";
+      if (ytPlayerRef.current && ytReadyRef.current) {
+        try {
+          ytPlayerRef.current.stopVideo();
+        } catch (_) {}
+      }
+      if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.src = song.src;
+      audio.load();
+      audio.volume = volumeRef.current;
+      audio
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch(() => setIsPlaying(false));
+
+      setDuration(song.duration);
+    }
+  }, []);
 
   playTrackInternalRef.current = playTrackInternal;
 
   // ── Play external (YouTube search result) song ─────────────────────────────
-  const playExternalSong = useCallback(
-    (song: Song) => {
-      setExternalSong(song);
-      setCurrentIdx(-1);
-      setProgress(0);
-      setCurrentTime(0);
+  const playExternalSong = useCallback((song: Song) => {
+    setExternalSong(song);
+    setCurrentIdx(-1);
+    setProgress(0);
+    setCurrentTime(0);
 
-      // Auto-switch mode silently based on song type
-      setCurrentMode(song.youtubeId ? "youtube" : "local");
+    // Auto-switch mode silently based on song type
+    setCurrentMode(song.youtubeId ? "youtube" : "local");
 
-      if (song.youtubeId) {
-        activePlayerRef.current = "youtube";
-        const audio = audioRef.current;
-        if (audio) {
-          audio.pause();
-          audio.src = "";
-        }
-        if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-
-        const loadYT = () => {
-          const yt = ytPlayerRef.current;
-          if (!yt) return;
-          yt.loadVideoById(song.youtubeId as string);
-          yt.setVolume(Math.round(volumeRef.current * 100));
-        };
-
-        if (ytReadyRef.current && ytPlayerRef.current) {
-          loadYT();
-        } else {
-          const prev = window.onYouTubeIframeAPIReady;
-          window.onYouTubeIframeAPIReady = () => {
-            if (prev) prev();
-            setTimeout(loadYT, 200);
-          };
-        }
-
-        setDuration(song.duration);
-        setIsPlaying(true);
-      } else if (song.src) {
-        activePlayerRef.current = "html5";
-        if (ytPlayerRef.current && ytReadyRef.current) {
-          try {
-            ytPlayerRef.current.stopVideo();
-          } catch (_) {}
-        }
-        if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-
-        const audio = audioRef.current;
-        if (!audio) return;
-        audio.src = song.src;
-        audio.load();
-        audio.volume = volumeRef.current;
-        audio
-          .play()
-          .then(() => setIsPlaying(true))
-          .catch(() => setIsPlaying(false));
-
-        setDuration(song.duration);
+    if (song.youtubeId) {
+      activePlayerRef.current = "youtube";
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.src = "";
       }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+      if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
 
-  // ── playYT: play a YouTube video by ID and title directly ──────────────────
+      const loadYT = () => {
+        const yt = ytPlayerRef.current;
+        if (!yt) return;
+        yt.loadVideoById(song.youtubeId as string);
+        yt.setVolume(Math.round(volumeRef.current * 100));
+      };
+
+      if (ytReadyRef.current && ytPlayerRef.current) {
+        loadYT();
+      } else {
+        pendingYtVideoRef.current = song.youtubeId;
+      }
+
+      setDuration(song.duration);
+      setIsPlaying(true);
+    } else if (song.src) {
+      activePlayerRef.current = "html5";
+      if (ytPlayerRef.current && ytReadyRef.current) {
+        try {
+          ytPlayerRef.current.stopVideo();
+        } catch (_) {}
+      }
+      if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.src = song.src;
+      audio.load();
+      audio.volume = volumeRef.current;
+      audio
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch(() => setIsPlaying(false));
+
+      setDuration(song.duration);
+    }
+  }, []);
+
+  // ── playYT: play a YouTube video by ID and title ───────────────────────────
+  // FIX: properly checks ytReadyRef, adds to ytQueue for navigation/auto-advance
   const playYT = useCallback(
     (videoId: string, title: string) => {
-      // 1. Set mode to youtube
-      setCurrentMode("youtube");
-      // 2. Pause local audio
-      audioRef.current?.pause();
-      // 3. Stop YT progress interval
-      if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-      // 4. Set active player
-      activePlayerRef.current = "youtube";
-      // 5. Load video
-      ytPlayerRef.current?.loadVideoById(videoId);
-      // 6. Set volume
-      ytPlayerRef.current?.setVolume(Math.round(volumeRef.current * 100));
-      // 7. Update current song state
-      setExternalSong({
+      const newSong: Song = {
         id: `yt-${videoId}`,
         title,
         artist: "YouTube",
@@ -456,19 +511,38 @@ export function usePlayer(): PlayerState {
         duration: 0,
         src: "",
         emoji: "🎵",
-        colorClass: "bg-red-900",
+        colorClass: "c1",
+      };
+
+      // Add to ytQueue or update position if already present
+      setYtQueue((prev) => {
+        const existingIdx = prev.findIndex((s) => s.youtubeId === videoId);
+        if (existingIdx >= 0) {
+          // Song already in queue — just update the index pointer
+          ytQueueIdxRef.current = existingIdx;
+          setYtQueueIdx(existingIdx);
+          return prev;
+        }
+        // Append new song to queue
+        const next = [...prev, newSong];
+        const newIdx = next.length - 1;
+        ytQueueIdxRef.current = newIdx;
+        setYtQueueIdx(newIdx);
+        return next;
       });
-      // 8. Reset idx
-      setCurrentIdx(-1);
-      // 9. Set playing
-      setIsPlaying(true);
-      // 10. Reset progress
-      setProgress(0);
-      setCurrentTime(0);
+
+      // Play it
+      playYtQueueItem(newSong);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [playYtQueueItem],
   );
+
+  const clearYtQueue = useCallback(() => {
+    setYtQueue([]);
+    setYtQueueIdx(-1);
+    ytQueueRef.current = [];
+    ytQueueIdxRef.current = -1;
+  }, []);
 
   const playTrack = useCallback(
     (idx: number) => playTrackInternal(idx),
@@ -485,11 +559,14 @@ export function usePlayer(): PlayerState {
     if (activePlayerRef.current === "youtube") {
       const yt = ytPlayerRef.current;
       if (!yt) return;
+      // Optimistic UI update immediately, YT events will confirm
       const state = yt.getPlayerState();
       if (window.YT && state === window.YT.PlayerState.PLAYING) {
         yt.pauseVideo();
+        setIsPlaying(false); // optimistic
       } else {
         yt.playVideo();
+        setIsPlaying(true); // optimistic
       }
     } else {
       const audio = audioRef.current;
@@ -506,31 +583,67 @@ export function usePlayer(): PlayerState {
     }
   }, [playTrackInternal]);
 
+  // FIX: nextTrack navigates ytQueue when in YouTube mode
   const nextTrack = useCallback(() => {
+    if (activePlayerRef.current === "youtube") {
+      const queue = ytQueueRef.current;
+      const qIdx = ytQueueIdxRef.current;
+      const nextQIdx = qIdx + 1;
+      if (queue.length > 0 && nextQIdx < queue.length) {
+        setYtQueueIdx(nextQIdx);
+        ytQueueIdxRef.current = nextQIdx;
+        playYtQueueItem(queue[nextQIdx]);
+        return;
+      }
+      // No more in queue, fall through to local tracks
+    }
     setExternalSong(null);
     const idx = currentIdxRef.current < 0 ? 0 : currentIdxRef.current;
     const next = shuffleRef.current
       ? Math.floor(Math.random() * songs.length)
       : (idx + 1) % songs.length;
     playTrackInternal(next);
-  }, [playTrackInternal]);
+  }, [playTrackInternal, playYtQueueItem]);
 
+  // FIX: prevTrack navigates ytQueue when in YouTube mode
   const prevTrack = useCallback(() => {
-    const isYT = activePlayerRef.current === "youtube";
-    const ct = isYT
-      ? (ytPlayerRef.current?.getCurrentTime() ?? 0)
-      : (audioRef.current?.currentTime ?? 0);
+    if (activePlayerRef.current === "youtube") {
+      const yt = ytPlayerRef.current;
+      const ct = yt?.getCurrentTime() ?? 0;
+      if (ct > 3) {
+        // If more than 3s in, restart current
+        yt?.seekTo(0, true);
+        setCurrentTime(0);
+        setProgress(0);
+        return;
+      }
+      const queue = ytQueueRef.current;
+      const qIdx = ytQueueIdxRef.current;
+      const prevQIdx = qIdx - 1;
+      if (queue.length > 0 && prevQIdx >= 0) {
+        setYtQueueIdx(prevQIdx);
+        ytQueueIdxRef.current = prevQIdx;
+        playYtQueueItem(queue[prevQIdx]);
+        return;
+      }
+      // At start of queue, restart current
+      yt?.seekTo(0, true);
+      setCurrentTime(0);
+      setProgress(0);
+      return;
+    }
+
+    const ct = audioRef.current?.currentTime ?? 0;
 
     if (ct > 3) {
-      if (isYT) ytPlayerRef.current?.seekTo(0, true);
-      else if (audioRef.current) audioRef.current.currentTime = 0;
+      if (audioRef.current) audioRef.current.currentTime = 0;
       return;
     }
     setExternalSong(null);
     const idx = currentIdxRef.current < 0 ? 0 : currentIdxRef.current;
     const prev = (idx - 1 + songs.length) % songs.length;
     playTrackInternal(prev);
-  }, [playTrackInternal]);
+  }, [playTrackInternal, playYtQueueItem]);
 
   const toggleShuffle = useCallback(() => {
     setIsShuffle((prev) => {
@@ -634,6 +747,8 @@ export function usePlayer(): PlayerState {
     isCurrentLiked,
     currentSong,
     currentMode,
+    ytQueue,
+    ytQueueIdx,
     showToast,
     playTrack,
     playExternalSong,
@@ -647,5 +762,6 @@ export function usePlayer(): PlayerState {
     seek,
     setVolume,
     toggleMute,
+    clearYtQueue,
   };
 }

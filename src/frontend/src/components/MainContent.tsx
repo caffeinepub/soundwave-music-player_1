@@ -21,7 +21,8 @@ type ActiveView = "home" | "search" | "liked" | "recent";
 interface MainContentProps {
   activeView: ActiveView;
   songs: Song[];
-  currentIdx: number;
+  // FIX: accept the actual currentSongId from the player (includes external/YT songs)
+  currentSongId: string | null;
   isPlaying: boolean;
   likedIds: Set<string>;
   recentIds: number[];
@@ -263,7 +264,7 @@ function SearchInput({
   const [showDropdown, setShowDropdown] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Fetch top 3 suggestions when typing
+  // Fetch top 3 suggestions when typing (debounced 350ms)
   useEffect(() => {
     if (!value.trim()) {
       setSuggestions([]);
@@ -349,7 +350,7 @@ function SearchInput({
         onBlur={() => setFocused(false)}
       />
 
-      {/* Suggestions dropdown */}
+      {/* Suggestions dropdown (top 3 quick access) */}
       {showDropdown && value.trim() && (
         <div
           data-ocid="search.popover"
@@ -450,7 +451,6 @@ function YouTubeSearchResults({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const runSearch = useCallback(async (q: string) => {
-    // Cancel any in-flight request
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
 
@@ -476,7 +476,6 @@ function YouTubeSearchResults({
     const q = query.trim();
     console.log("[YouTubeSearchResults] Query changed:", q);
 
-    // Clear previous timer
     if (timerRef.current) clearTimeout(timerRef.current);
 
     if (!q) {
@@ -511,23 +510,25 @@ function YouTubeSearchResults({
   }
 
   if (error) {
+    // FIX: Only show error on real API failures. No "check console" copy.
     return (
-      <div
-        className="text-center py-16"
-        style={{ color: "#e05555" }}
-        data-ocid="search.error_state"
-      >
-        <div className="text-[14px] font-semibold mb-2">
-          Failed to load results
-        </div>
-        <div className="text-[12px] opacity-70" style={{ color: SubtleColor }}>
-          {error}
+      <div className="text-center py-16" data-ocid="search.error_state">
+        <div className="text-4xl mb-3">⚠️</div>
+        <div
+          className="text-[14px] font-semibold mb-2"
+          style={{ color: "#e05555" }}
+        >
+          Could not load results
         </div>
         <div
-          className="text-[11px] mt-3 opacity-50"
+          className="text-[12px] max-w-xs mx-auto"
           style={{ color: SubtleColor }}
         >
-          Check browser console (F12) for details
+          {error.includes("quota") || error.includes("403")
+            ? "Your YouTube API quota has been reached. Try again tomorrow or use a different API key."
+            : error.includes("Network") || error.includes("fetch")
+              ? "Could not reach YouTube. Check your internet connection or disable any ad blockers."
+              : error}
         </div>
       </div>
     );
@@ -540,7 +541,7 @@ function YouTubeSearchResults({
         style={{ color: SubtleColor }}
         data-ocid="search.empty_state"
       >
-        No YouTube results found
+        No results found for “{query}”
       </div>
     );
   }
@@ -562,6 +563,7 @@ function YouTubeSearchResults({
           src: "",
           youtubeId: item.id.videoId,
         };
+        // FIX: isActive now correctly matches YouTube songs via currentSongId
         return (
           <SongCard
             key={song.id}
@@ -591,7 +593,7 @@ function YouTubeSearchResults({
 export default function MainContent({
   activeView,
   songs,
-  currentIdx,
+  currentSongId,
   isPlaying,
   likedIds,
   recentIds,
@@ -608,9 +610,6 @@ export default function MainContent({
     .map((idx) => ({ song: songs[idx], idx }))
     .filter((x) => x.song != null);
 
-  const currentSong = currentIdx >= 0 ? songs[currentIdx] : null;
-  const currentSongId = currentSong?.id ?? null;
-
   const renderCards = (list: Song[], prefix: string) => (
     <div
       className="grid gap-4"
@@ -623,7 +622,7 @@ export default function MainContent({
             key={song.id}
             song={song}
             index={i}
-            isActive={currentIdx === globalIdx}
+            isActive={currentSongId === song.id}
             isPlaying={isPlaying}
             isLiked={likedIds.has(song.id)}
             onPlay={() => onSongPlay(globalIdx)}
@@ -757,7 +756,6 @@ export default function MainContent({
       </div>
 
       <div className="px-6 pb-8">
-        {/* Wrap each view in a fade-in div keyed by activeView */}
         <div key={activeView} className="fade-in">
           {activeView === "home" && (
             <>
@@ -807,7 +805,7 @@ export default function MainContent({
                       key={song.id}
                       song={song}
                       index={i}
-                      isActive={currentIdx === i}
+                      isActive={currentSongId === song.id}
                       isPlaying={isPlaying}
                       isLiked={likedIds.has(song.id)}
                       onPlay={() => onSongPlay(i)}
@@ -861,7 +859,7 @@ export default function MainContent({
                         key={`${song.id}-${i}`}
                         song={song}
                         index={i}
-                        isActive={currentIdx === idx}
+                        isActive={currentSongId === song.id}
                         isPlaying={isPlaying}
                         isLiked={likedIds.has(song.id)}
                         onPlay={() => onSongPlay(idx)}
@@ -931,7 +929,7 @@ export default function MainContent({
                       key={`${song.id}-${i}`}
                       song={song}
                       index={i}
-                      isActive={currentIdx === idx}
+                      isActive={currentSongId === song.id}
                       isPlaying={isPlaying}
                       isLiked={likedIds.has(song.id)}
                       onPlay={() => onSongPlay(idx)}
