@@ -133,7 +133,7 @@ export default function App() {
             onClick={() => setActiveView(v)}
             className="mob-btn"
             style={{
-              color: activeView === v ? "oklch(0.65 0.19 145)" : "#b3b3b3",
+              color: activeView === v ? "#1DB954" : "#b3b3b3",
             }}
           >
             {v === "home" && "🏠"}

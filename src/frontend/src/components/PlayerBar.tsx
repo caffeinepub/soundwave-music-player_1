@@ -36,9 +36,11 @@ interface PlayerBarProps {
   onToggleQueue: () => void;
 }
 
-const GreenColor = "oklch(0.65 0.19 145)";
-const MutedColor = "oklch(0.55 0 0)";
-const FgColor = "oklch(0.96 0 0)";
+const Accent = "#1DB954";
+const AccentGlow = "rgba(29, 185, 84, 0.45)";
+const MutedColor = "#6a6a6a";
+const SubtleColor = "#b3b3b3";
+const FgColor = "#ffffff";
 
 export default function PlayerBar({
   song,
@@ -90,25 +92,23 @@ export default function PlayerBar({
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-50 flex items-center px-5 gap-3"
-      style={{
-        height: "90px",
-        background: "#181818",
-        borderTop: "1px solid #282828",
-      }}
+      className="glass fixed bottom-0 left-0 right-0 z-50 flex items-center px-6 gap-4"
+      style={{ height: "88px" }}
       data-ocid="player.panel"
     >
       {/* Left: now playing */}
       <div
-        className="flex items-center gap-3 flex-shrink-0"
-        style={{ width: 220 }}
+        className="flex items-center gap-3.5 flex-shrink-0"
+        style={{ width: 240 }}
       >
+        {/* Art */}
         <div
-          className={`rounded-lg flex-shrink-0 flex items-center justify-center text-2xl relative overflow-hidden${song ? ` ${song.colorClass}` : ""}`}
+          className={`rounded-xl flex-shrink-0 flex items-center justify-center text-2xl relative overflow-hidden${song ? ` ${song.colorClass}` : ""}`}
           style={{
-            width: 52,
-            height: 52,
+            width: 58,
+            height: 58,
             background: song ? undefined : "#1a1a1a",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
           }}
         >
           {isPlaying ? (
@@ -123,12 +123,15 @@ export default function PlayerBar({
         </div>
         <div className="min-w-0 flex-1">
           <p
-            className="text-[13px] font-semibold truncate"
-            style={{ color: FgColor }}
+            className="text-[13px] font-bold truncate"
+            style={{ color: FgColor, letterSpacing: "-0.01em" }}
           >
             {song?.title ?? "Select a song"}
           </p>
-          <p className="text-[11px] truncate" style={{ color: MutedColor }}>
+          <p
+            className="text-[11px] truncate mt-0.5"
+            style={{ color: SubtleColor }}
+          >
             {song?.artist ?? "—"}
           </p>
         </div>
@@ -136,11 +139,19 @@ export default function PlayerBar({
           type="button"
           data-ocid="player.like.button"
           onClick={onToggleLike}
-          className="flex-shrink-0 p-1.5 cursor-pointer transition-transform hover:scale-110"
+          className="flex-shrink-0 p-1.5 cursor-pointer"
           style={{
-            color: isLiked ? GreenColor : MutedColor,
+            color: isLiked ? Accent : MutedColor,
             background: "none",
             border: "none",
+            transition: "color 0.2s ease, transform 0.15s ease",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.transform =
+              "scale(1.15)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
           }}
           aria-label={isLiked ? "Unlike song" : "Like song"}
         >
@@ -159,17 +170,19 @@ export default function PlayerBar({
       </div>
 
       {/* Center: controls + progress */}
-      <div className="flex flex-col items-center gap-1.5 flex-1 max-w-[460px]">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col items-center gap-2 flex-1 max-w-[500px]">
+        {/* Control buttons */}
+        <div className="flex items-center gap-5">
           <button
             type="button"
             data-ocid="player.shuffle.toggle"
             onClick={onToggleShuffle}
-            className="p-1.5 cursor-pointer transition-colors"
+            className="p-1 cursor-pointer flex-shrink-0"
             style={{
-              color: isShuffled ? GreenColor : MutedColor,
+              color: isShuffled ? Accent : MutedColor,
               background: "none",
               border: "none",
+              transition: "color 0.2s ease",
             }}
             aria-label={isShuffled ? "Disable shuffle" : "Enable shuffle"}
             aria-pressed={isShuffled}
@@ -184,30 +197,49 @@ export default function PlayerBar({
             type="button"
             data-ocid="player.prev.button"
             onClick={onPrev}
-            className="p-1.5 cursor-pointer transition-colors"
-            style={{ color: FgColor, background: "none", border: "none" }}
+            className="p-1 cursor-pointer flex-shrink-0"
+            style={{
+              color: SubtleColor,
+              background: "none",
+              border: "none",
+              transition: "color 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = FgColor;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = SubtleColor;
+            }}
             aria-label="Previous track"
           >
             <SkipBack
-              size={20}
+              size={22}
               fill="currentColor"
               stroke="none"
               aria-hidden="true"
             />
           </button>
+          {/* Main play/pause button */}
           <button
             type="button"
             data-ocid="player.play.button"
             onClick={onTogglePlay}
-            className="w-[34px] h-[34px] rounded-full flex items-center justify-center cursor-pointer transition-all hover:scale-105 flex-shrink-0"
-            style={{ background: FgColor, border: "none" }}
+            className={`play-btn-glow w-[52px] h-[52px] rounded-full flex items-center justify-center cursor-pointer flex-shrink-0${isPlaying ? " playing" : ""}`}
+            style={{
+              background: Accent,
+              border: "none",
+              boxShadow: isPlaying
+                ? `0 0 24px ${AccentGlow}, 0 4px 16px rgba(0,0,0,0.4)`
+                : "0 4px 16px rgba(0,0,0,0.4)",
+              transition: "box-shadow 0.2s ease, transform 0.15s ease",
+            }}
             aria-label={isPlaying ? "Pause" : "Play"}
           >
             {isPlaying ? (
-              <Pause size={15} fill="#000" stroke="none" aria-hidden="true" />
+              <Pause size={20} fill="#000" stroke="none" aria-hidden="true" />
             ) : (
               <Play
-                size={15}
+                size={20}
                 fill="#000"
                 stroke="none"
                 className="ml-0.5"
@@ -219,12 +251,23 @@ export default function PlayerBar({
             type="button"
             data-ocid="player.next.button"
             onClick={onNext}
-            className="p-1.5 cursor-pointer transition-colors"
-            style={{ color: FgColor, background: "none", border: "none" }}
+            className="p-1 cursor-pointer flex-shrink-0"
+            style={{
+              color: SubtleColor,
+              background: "none",
+              border: "none",
+              transition: "color 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = FgColor;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = SubtleColor;
+            }}
             aria-label="Next track"
           >
             <SkipForward
-              size={20}
+              size={22}
               fill="currentColor"
               stroke="none"
               aria-hidden="true"
@@ -234,11 +277,12 @@ export default function PlayerBar({
             type="button"
             data-ocid="player.repeat.toggle"
             onClick={onToggleRepeat}
-            className="p-1.5 cursor-pointer transition-colors"
+            className="p-1 cursor-pointer flex-shrink-0"
             style={{
-              color: repeatMode !== "none" ? GreenColor : MutedColor,
+              color: repeatMode !== "none" ? Accent : MutedColor,
               background: "none",
               border: "none",
+              transition: "color 0.2s ease",
             }}
             aria-label={`Repeat: ${repeatMode}`}
             aria-pressed={repeatMode !== "none"}
@@ -256,9 +300,9 @@ export default function PlayerBar({
         </div>
 
         {/* Progress row */}
-        <div className="flex items-center gap-2 w-full">
+        <div className="flex items-center gap-2.5 w-full">
           <span
-            className="text-[10px] w-8 text-right flex-shrink-0"
+            className="text-[10px] w-8 text-right flex-shrink-0 font-medium"
             style={{ color: MutedColor }}
           >
             {formatTime(currentTime)}
@@ -274,24 +318,17 @@ export default function PlayerBar({
             tabIndex={0}
             onClick={handleProgressClick}
             onKeyDown={handleProgressKey}
-            className="progress-bar-container flex-1 h-1 rounded-full cursor-pointer relative"
-            style={{ background: "#3a3a3a" }}
+            className="progress-bar-container progress-bar-track flex-1 cursor-pointer group"
           >
             <div
-              className="h-full rounded-full relative"
-              style={{ width: `${progress * 100}%`, background: MutedColor }}
+              className="progress-bar-fill"
+              style={{ width: `${progress * 100}%` }}
             >
-              <div
-                className="progress-knob absolute right-0 top-1/2 w-2.5 h-2.5 rounded-full opacity-0 transition-opacity"
-                style={{
-                  background: FgColor,
-                  transform: "translateY(-50%) translateX(50%)",
-                }}
-              />
+              <div className="progress-bar-knob" />
             </div>
           </div>
           <span
-            className="text-[10px] w-8 flex-shrink-0"
+            className="text-[10px] w-8 flex-shrink-0 font-medium"
             style={{ color: MutedColor }}
           >
             {formatTime(displayDuration)}
@@ -300,39 +337,50 @@ export default function PlayerBar({
       </div>
 
       {/* Right: queue + volume */}
-      <div className="flex items-center gap-2.5 flex-shrink-0">
+      <div
+        className="flex items-center gap-3 flex-shrink-0"
+        style={{ width: 200, justifyContent: "flex-end" }}
+      >
         <button
           type="button"
           data-ocid="player.queue.toggle"
           onClick={onToggleQueue}
-          className="p-1.5 cursor-pointer transition-colors"
+          className="p-1.5 cursor-pointer flex-shrink-0"
           style={{
-            color: isQueueOpen ? GreenColor : MutedColor,
+            color: isQueueOpen ? Accent : MutedColor,
             background: "none",
             border: "none",
+            transition: "color 0.2s ease",
           }}
           aria-label="Toggle queue"
           aria-pressed={isQueueOpen}
         >
-          <ListMusic size={16} aria-hidden="true" />
+          <ListMusic size={17} aria-hidden="true" />
         </button>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             data-ocid="player.volume.button"
             onClick={() => onVolumeChange(volume > 0 ? 0 : 0.7)}
-            className="p-1.5 cursor-pointer transition-colors"
+            className="p-1.5 cursor-pointer flex-shrink-0"
             style={{
-              color: volume === 0 ? MutedColor : MutedColor,
+              color: MutedColor,
               background: "none",
               border: "none",
+              transition: "color 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = SubtleColor;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.color = MutedColor;
             }}
             aria-label={volume === 0 ? "Unmute" : "Mute"}
           >
             {volume === 0 ? (
-              <VolumeX size={15} aria-hidden="true" />
+              <VolumeX size={16} aria-hidden="true" />
             ) : (
-              <Volume2 size={15} aria-hidden="true" />
+              <Volume2 size={16} aria-hidden="true" />
             )}
           </button>
           <div
@@ -346,20 +394,14 @@ export default function PlayerBar({
             tabIndex={0}
             onClick={handleVolumeClick}
             onKeyDown={handleVolumeKey}
-            className="volume-bar-container h-1 rounded-full cursor-pointer relative"
-            style={{ width: 72, background: "#3a3a3a" }}
+            className="volume-bar-container progress-bar-track cursor-pointer"
+            style={{ width: 80 }}
           >
             <div
-              className="h-full rounded-full relative"
-              style={{ width: `${volume * 100}%`, background: MutedColor }}
+              className="progress-bar-fill"
+              style={{ width: `${volume * 100}%` }}
             >
-              <div
-                className="volume-knob absolute right-0 top-1/2 w-2.5 h-2.5 rounded-full opacity-0 transition-opacity"
-                style={{
-                  background: FgColor,
-                  transform: "translateY(-50%) translateX(50%)",
-                }}
-              />
+              <div className="progress-bar-knob" />
             </div>
           </div>
         </div>

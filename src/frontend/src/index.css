@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900;1,14..32,400&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -6,39 +8,39 @@
   :root {
     --radius: 0.75rem;
 
-    /* Soundwave dark theme */
-    --background: 0.13 0 0;
+    /* Soundwave Spotify-style dark theme */
+    --background: 0.09 0 0;
     --foreground: 0.96 0 0;
-    --card: 0.18 0.003 250;
+    --card: 0.15 0 0;
     --card-foreground: 0.96 0 0;
-    --popover: 0.18 0.003 250;
+    --popover: 0.15 0 0;
     --popover-foreground: 0.96 0 0;
-    --primary: 0.65 0.19 145;
-    --primary-foreground: 0.13 0 0;
-    --secondary: 0.2 0.003 250;
+    --primary: 0.7 0.19 145;
+    --primary-foreground: 0.09 0 0;
+    --secondary: 0.18 0 0;
     --secondary-foreground: 0.96 0 0;
-    --muted: 0.2 0.003 250;
-    --muted-foreground: 0.72 0 0;
-    --accent: 0.68 0.2 145;
-    --accent-foreground: 0.13 0 0;
+    --muted: 0.18 0 0;
+    --muted-foreground: 0.7 0 0;
+    --accent: 0.7 0.19 145;
+    --accent-foreground: 0.09 0 0;
     --destructive: 0.577 0.245 27.325;
     --destructive-foreground: 0.985 0 0;
-    --border: 0.28 0 0;
-    --input: 0.25 0 0;
-    --ring: 0.65 0.19 145;
+    --border: 0.22 0 0;
+    --input: 0.2 0 0;
+    --ring: 0.7 0.19 145;
     --chart-1: 0.488 0.243 264.376;
     --chart-2: 0.696 0.17 162.48;
     --chart-3: 0.769 0.188 70.08;
     --chart-4: 0.627 0.265 303.9;
     --chart-5: 0.645 0.246 16.439;
-    --sidebar: 0.145 0 0;
+    --sidebar: 0.09 0 0;
     --sidebar-foreground: 0.96 0 0;
-    --sidebar-primary: 0.65 0.19 145;
-    --sidebar-primary-foreground: 0.13 0 0;
-    --sidebar-accent: 0.22 0 0;
+    --sidebar-primary: 0.7 0.19 145;
+    --sidebar-primary-foreground: 0.09 0 0;
+    --sidebar-accent: 0.18 0 0;
     --sidebar-accent-foreground: 0.96 0 0;
-    --sidebar-border: 0.28 0 0;
-    --sidebar-ring: 0.65 0.19 145;
+    --sidebar-border: 0.18 0 0;
+    --sidebar-ring: 0.7 0.19 145;
   }
 
   * {
@@ -47,25 +49,115 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: "Figtree", sans-serif;
+    font-family: "Inter", "Figtree", sans-serif;
     overflow: hidden;
   }
 
   /* Custom scrollbar */
   ::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
+    width: 4px;
+    height: 4px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: oklch(0.35 0 0);
+    background: oklch(0.28 0 0);
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.45 0 0);
+    background: oklch(0.38 0 0);
   }
+}
+
+/* ── Fade-in animation ── */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.28s ease forwards;
+}
+
+/* ── Music card hover effects ── */
+.music-card {
+  transition: transform 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease,
+    background 0.2s ease;
+  border-radius: 12px;
+}
+
+.music-card:hover {
+  transform: scale(1.03);
+  filter: brightness(1.08);
+}
+
+.play-overlay {
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  transform: translateY(8px);
+}
+
+.music-card:hover .play-overlay {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Glassmorphism player bar ── */
+.glass {
+  background: rgba(18, 18, 18, 0.88) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+}
+
+/* ── Progress & volume bars ── */
+.progress-bar-track {
+  height: 4px;
+  background: oklch(0.3 0 0);
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+  transition: height 0.15s ease;
+}
+
+.progress-bar-track:hover {
+  height: 6px;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: oklch(0.7 0.19 145);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+  position: relative;
+}
+
+.progress-bar-track:hover .progress-bar-fill {
+  background: oklch(0.75 0.19 145);
+}
+
+.progress-bar-knob {
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.progress-bar-track:hover .progress-bar-knob {
+  opacity: 1;
 }
 
 /* ── App layout ── */
@@ -102,7 +194,7 @@
 .eq-bar {
   width: 3px;
   min-height: 3px;
-  background-color: oklch(0.65 0.19 145);
+  background-color: oklch(0.7 0.19 145);
   border-radius: 2px;
   animation: eq-bar 0.8s ease-in-out infinite;
 }
@@ -119,7 +211,7 @@
   opacity: 1;
 }
 .progress-bar-container:hover > div {
-  background: oklch(0.65 0.19 145) !important;
+  background: oklch(0.7 0.19 145) !important;
 }
 
 /* ── Color gradient classes for song art ── */
@@ -148,9 +240,9 @@
   right: 0;
   top: 0;
   bottom: 90px;
-  width: 280px;
-  background: #121212;
-  border-left: 1px solid #282828;
+  width: 300px;
+  background: #181818;
+  border-left: 1px solid #242424;
   z-index: 200;
   transform: translateX(100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -178,6 +270,7 @@
   pointer-events: none;
   z-index: 500;
   white-space: nowrap;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 .toast-msg.show {
   opacity: 1;
@@ -196,9 +289,35 @@
   background: none;
   border: none;
   font-size: 10px;
-  font-family: "Figtree", sans-serif;
+  font-family: "Inter", "Figtree", sans-serif;
   cursor: pointer;
   padding: 4px 12px;
+  transition: color 0.2s ease;
+}
+
+/* ── Sidebar nav button hover ── */
+.nav-item {
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #fff !important;
+}
+
+/* ── Button interactions ── */
+button {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+/* ── Play button glow ── */
+.play-btn-glow {
+  box-shadow: 0 0 20px rgba(29, 185, 84, 0.45), 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.play-btn-glow:hover {
+  box-shadow: 0 0 30px rgba(29, 185, 84, 0.6), 0 4px 20px rgba(0, 0, 0, 0.5);
+  transform: scale(1.06);
 }
 
 @media (max-width: 700px) {

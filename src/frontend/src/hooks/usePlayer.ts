@@ -65,6 +65,7 @@ export interface PlayerState {
   toastMsg: string;
   isCurrentLiked: boolean;
   currentSong: Song | null;
+  currentMode: "local" | "youtube";
   showToast: (msg: string) => void;
   playTrack: (idx: number) => void;
   playExternalSong: (song: Song) => void;
@@ -113,6 +114,7 @@ export function usePlayer(): PlayerState {
   const [recentIds, setRecentIds] = useState<number[]>(loadRecent);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
+  const [currentMode, setCurrentMode] = useState<"local" | "youtube">("local");
 
   // HTML5 Audio for local SoundHelix tracks
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -300,6 +302,9 @@ export function usePlayer(): PlayerState {
       setProgress(0);
       setCurrentTime(0);
 
+      // Auto-switch mode silently based on song type
+      setCurrentMode(song.youtubeId ? "youtube" : "local");
+
       setRecentIds((prev) => {
         const next = [idx, ...prev.filter((x) => x !== idx)].slice(0, 8);
         localStorage.setItem(LS_RECENT, JSON.stringify(next));
@@ -370,6 +375,9 @@ export function usePlayer(): PlayerState {
       setProgress(0);
       setCurrentTime(0);
 
+      // Auto-switch mode silently based on song type
+      setCurrentMode(song.youtubeId ? "youtube" : "local");
+
       if (song.youtubeId) {
         activePlayerRef.current = "youtube";
         const audio = audioRef.current;
@@ -427,7 +435,20 @@ export function usePlayer(): PlayerState {
   // ── playYT: play a YouTube video by ID and title directly ──────────────────
   const playYT = useCallback(
     (videoId: string, title: string) => {
-      const song: Song = {
+      // 1. Set mode to youtube
+      setCurrentMode("youtube");
+      // 2. Pause local audio
+      audioRef.current?.pause();
+      // 3. Stop YT progress interval
+      if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+      // 4. Set active player
+      activePlayerRef.current = "youtube";
+      // 5. Load video
+      ytPlayerRef.current?.loadVideoById(videoId);
+      // 6. Set volume
+      ytPlayerRef.current?.setVolume(Math.round(volumeRef.current * 100));
+      // 7. Update current song state
+      setExternalSong({
         id: `yt-${videoId}`,
         title,
         artist: "YouTube",
@@ -436,10 +457,17 @@ export function usePlayer(): PlayerState {
         src: "",
         emoji: "🎵",
         colorClass: "bg-red-900",
-      };
-      playExternalSong(song);
+      });
+      // 8. Reset idx
+      setCurrentIdx(-1);
+      // 9. Set playing
+      setIsPlaying(true);
+      // 10. Reset progress
+      setProgress(0);
+      setCurrentTime(0);
     },
-    [playExternalSong],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
 
   const playTrack = useCallback(
@@ -605,6 +633,7 @@ export function usePlayer(): PlayerState {
     toastMsg: toastVisible ? toastMsg : "",
     isCurrentLiked,
     currentSong,
+    currentMode,
     showToast,
     playTrack,
     playExternalSong,
