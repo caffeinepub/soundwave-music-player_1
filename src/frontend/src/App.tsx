@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import IntroAnimation from "./components/IntroAnimation";
 import MainContent from "./components/MainContent";
 import PlayerBar from "./components/PlayerBar";
 import QueuePanel from "./components/QueuePanel";
@@ -10,6 +11,9 @@ import { usePlayer } from "./hooks/usePlayer";
 type ActiveView = "home" | "search" | "liked" | "recent";
 
 export default function App() {
+  const [introSeen, setIntroSeen] = useState(
+    () => !!sessionStorage.getItem("sw_intro_seen"),
+  );
   const [activeView, setActiveView] = useState<ActiveView>("home");
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,6 +49,8 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      {!introSeen && <IntroAnimation onDone={() => setIntroSeen(true)} />}
+
       {/* YouTube IFrame Player container — hidden, controlled by usePlayer */}
       <div
         id="yt-player"

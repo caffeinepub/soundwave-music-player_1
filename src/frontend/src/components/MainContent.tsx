@@ -14,14 +14,17 @@ import {
   featuredPlaylists,
   formatTime,
 } from "../data/songs";
-import { type YouTubeItem, searchYouTube } from "../utils/youtubeSearch";
+import {
+  FallbackError,
+  type YouTubeItem,
+  searchYouTube,
+} from "../utils/youtubeSearch";
 
 type ActiveView = "home" | "search" | "liked" | "recent";
 
 interface MainContentProps {
   activeView: ActiveView;
   songs: Song[];
-  // FIX: accept the actual currentSongId from the player (includes external/YT songs)
   currentSongId: string | null;
   isPlaying: boolean;
   likedIds: Set<string>;
@@ -46,6 +49,438 @@ function getGreeting() {
   return "Good evening";
 }
 
+const BOLLYWOOD_ARTISTS = [
+  {
+    name: "Arijit Singh",
+    image: "/assets/generated/artist-arijit-singh.dim_400x400.jpg",
+    searchQuery: "Arijit Singh best songs",
+  },
+  {
+    name: "Shreya Ghoshal",
+    image: "/assets/generated/artist-shreya-ghoshal.dim_400x400.jpg",
+    searchQuery: "Shreya Ghoshal best songs",
+  },
+  {
+    name: "Sonu Nigam",
+    image: "/assets/generated/artist-sonu-nigam.dim_400x400.jpg",
+    searchQuery: "Sonu Nigam hits",
+  },
+  {
+    name: "Armaan Malik",
+    image: "/assets/generated/artist-armaan-malik.dim_400x400.jpg",
+    searchQuery: "Armaan Malik songs",
+  },
+  {
+    name: "Neha Kakkar",
+    image: "/assets/generated/artist-neha-kakkar.dim_400x400.jpg",
+    searchQuery: "Neha Kakkar hits",
+  },
+  {
+    name: "KK",
+    image: "/assets/generated/artist-kk.dim_400x400.jpg",
+    searchQuery: "KK singer best songs",
+  },
+  {
+    name: "Atif Aslam",
+    image: "/assets/generated/artist-atif-aslam.dim_400x400.jpg",
+    searchQuery: "Atif Aslam songs",
+  },
+  {
+    name: "Jubin Nautiyal",
+    image: "/assets/generated/artist-jubin-nautiyal.dim_400x400.jpg",
+    searchQuery: "Jubin Nautiyal songs",
+  },
+  {
+    name: "Mohit Chauhan",
+    image: "/assets/generated/artist-mohit-chauhan.dim_400x400.jpg",
+    searchQuery: "Mohit Chauhan songs",
+  },
+  {
+    name: "Sunidhi Chauhan",
+    image: "/assets/generated/artist-sunidhi-chauhan.dim_400x400.jpg",
+    searchQuery: "Sunidhi Chauhan hits",
+  },
+];
+
+const HOLLYWOOD_ARTISTS = [
+  {
+    name: "Taylor Swift",
+    image: "/assets/generated/artist-taylor-swift.dim_400x400.jpg",
+    searchQuery: "Taylor Swift hits",
+  },
+  {
+    name: "Ed Sheeran",
+    image: "/assets/generated/artist-ed-sheeran.dim_400x400.jpg",
+    searchQuery: "Ed Sheeran best songs",
+  },
+  {
+    name: "Justin Bieber",
+    image: "/assets/generated/artist-justin-bieber.dim_400x400.jpg",
+    searchQuery: "Justin Bieber songs",
+  },
+  {
+    name: "The Weeknd",
+    image: "/assets/generated/artist-the-weeknd.dim_400x400.jpg",
+    searchQuery: "The Weeknd hits",
+  },
+  {
+    name: "Ariana Grande",
+    image: "/assets/generated/artist-ariana-grande.dim_400x400.jpg",
+    searchQuery: "Ariana Grande songs",
+  },
+  {
+    name: "Drake",
+    image: "/assets/generated/artist-drake.dim_400x400.jpg",
+    searchQuery: "Drake best songs",
+  },
+  {
+    name: "Billie Eilish",
+    image: "/assets/generated/artist-billie-eilish.dim_400x400.jpg",
+    searchQuery: "Billie Eilish songs",
+  },
+  {
+    name: "Bruno Mars",
+    image: "/assets/generated/artist-bruno-mars.dim_400x400.jpg",
+    searchQuery: "Bruno Mars hits",
+  },
+  {
+    name: "Dua Lipa",
+    image: "/assets/generated/artist-dua-lipa.dim_400x400.jpg",
+    searchQuery: "Dua Lipa songs",
+  },
+  {
+    name: "Coldplay",
+    image: "/assets/generated/artist-coldplay.dim_400x400.jpg",
+    searchQuery: "Coldplay best songs",
+  },
+];
+
+// ── Hero Banner ──────────────────────────────────────────────────────────────
+function HeroBanner({
+  onPlay,
+}: {
+  onPlay: () => void;
+}) {
+  return (
+    <div
+      className="hero-banner relative w-full overflow-hidden rounded-2xl"
+      style={{ height: "clamp(220px, 38vw, 420px)" }}
+    >
+      {/* Background image with zoom */}
+      <img
+        src="/assets/generated/hero-banner.dim_1920x1080.jpg"
+        alt="Featured artist"
+        loading="lazy"
+        className="hero-banner-img absolute inset-0 w-full h-full object-cover"
+        style={{ transformOrigin: "center center" }}
+      />
+      {/* Gradient overlay */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.15) 100%)",
+        }}
+      />
+      {/* Vignette */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)",
+        }}
+      />
+      {/* Content */}
+      <div className="absolute bottom-0 left-0 p-5 sm:p-8 flex flex-col gap-2 sm:gap-3">
+        <span
+          className="inline-flex items-center gap-1.5 self-start px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-widest"
+          style={{
+            background: "rgba(29,185,84,0.18)",
+            color: Accent,
+            border: "1px solid rgba(29,185,84,0.35)",
+          }}
+        >
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+          Trending Artist
+        </span>
+        <h1
+          className="text-white font-extrabold leading-none"
+          style={{
+            fontSize: "clamp(1.5rem, 4vw, 3rem)",
+            letterSpacing: "-0.03em",
+            textShadow: "0 2px 20px rgba(0,0,0,0.8)",
+          }}
+        >
+          Soundwave Hits
+        </h1>
+        <p
+          className="text-[13px] sm:text-[14px] font-medium"
+          style={{
+            color: "rgba(255,255,255,0.65)",
+            textShadow: "0 1px 8px rgba(0,0,0,0.6)",
+          }}
+        >
+          Top Hits · Premium Streaming
+        </p>
+        <button
+          type="button"
+          data-ocid="hero.primary_button"
+          onClick={onPlay}
+          aria-label="Play Now"
+          className="inline-flex items-center gap-2 self-start px-5 py-2.5 rounded-full font-bold text-black text-[13px] mt-1 cursor-pointer"
+          style={{
+            background: Accent,
+            boxShadow: "0 4px 24px rgba(29,185,84,0.45)",
+            transition: "transform 0.2s ease, box-shadow 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.transform =
+              "scale(1.04)";
+            (e.currentTarget as HTMLButtonElement).style.boxShadow =
+              "0 6px 32px rgba(29,185,84,0.6)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
+            (e.currentTarget as HTMLButtonElement).style.boxShadow =
+              "0 4px 24px rgba(29,185,84,0.45)";
+          }}
+        >
+          <Play
+            size={14}
+            fill="#000"
+            stroke="none"
+            aria-hidden="true"
+            className="ml-0.5"
+          />
+          Play Now
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Artist Card ───────────────────────────────────────────────────────────────
+function ArtistCard({
+  name,
+  imageUrl,
+  onPlay,
+  index,
+}: {
+  name: string;
+  imageUrl: string;
+  onPlay: () => void;
+  index: number;
+}) {
+  const [imgError, setImgError] = useState(false);
+
+  return (
+    <div
+      data-ocid={`artist.item.${index + 1}`}
+      onClick={onPlay}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onPlay();
+      }}
+      tabIndex={0}
+      // biome-ignore lint/a11y/useSemanticElements: styled card
+      role="button"
+      aria-label={`Play ${name}`}
+      className="artist-card flex-shrink-0 cursor-pointer outline-none"
+      style={{ width: "clamp(120px, 15vw, 160px)" }}
+    >
+      {/* Image container */}
+      <div className="relative w-full aspect-square rounded-xl overflow-hidden mb-2">
+        {!imgError ? (
+          <img
+            src={imageUrl}
+            alt={name}
+            loading="lazy"
+            onError={() => setImgError(true)}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center text-4xl"
+            style={{ background: "linear-gradient(135deg, #1a1a2e, #2a1a3a)" }}
+          >
+            🎵
+          </div>
+        )}
+        {/* Hover overlay */}
+        <div className="artist-card-overlay absolute inset-0 bg-black/50 flex items-center justify-center">
+          <div
+            className="w-11 h-11 rounded-full flex items-center justify-center"
+            style={{
+              background: Accent,
+              boxShadow: "0 4px 20px rgba(29,185,84,0.6)",
+            }}
+          >
+            <Play
+              size={16}
+              fill="#000"
+              stroke="none"
+              className="ml-0.5"
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+      </div>
+      <div className="text-white font-bold text-[13px] truncate mb-0.5">
+        {name}
+      </div>
+      <div
+        className="text-[11px] font-medium px-2 py-0.5 rounded-full self-start inline-block"
+        style={{
+          background: "rgba(29,185,84,0.1)",
+          color: Accent,
+          border: "1px solid rgba(29,185,84,0.2)",
+        }}
+      >
+        Top Songs
+      </div>
+    </div>
+  );
+}
+
+// ── Horizontal Row ────────────────────────────────────────────────────────────
+function HorizontalRow({
+  title,
+  onSeeAll,
+  children,
+}: {
+  title: string;
+  onSeeAll?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mb-8">
+      <div className="flex items-center justify-between mb-3">
+        <h2
+          className="text-[20px] font-bold text-white"
+          style={{ letterSpacing: "-0.02em" }}
+        >
+          {title}
+        </h2>
+        {onSeeAll && (
+          <button
+            type="button"
+            onClick={onSeeAll}
+            className="text-[12px] font-semibold cursor-pointer hover:text-white transition-colors"
+            style={{ color: SubtleColor, background: "none", border: "none" }}
+          >
+            See All
+          </button>
+        )}
+      </div>
+      <div className="relative">
+        <div
+          className="hide-scrollbar flex gap-4 overflow-x-auto pb-3"
+          style={{
+            scrollSnapType: "x mandatory",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          {children}
+        </div>
+        {/* Right fade gradient */}
+        <div
+          className="absolute right-0 top-0 bottom-3 w-16 pointer-events-none"
+          style={{
+            background: "linear-gradient(to left, #121212, transparent)",
+          }}
+        />
+      </div>
+    </section>
+  );
+}
+
+// ── Small Song Card for horizontal rows ───────────────────────────────────────
+function HorizSongCard({
+  song,
+  index,
+  isActive,
+  isPlaying,
+  onPlay,
+}: {
+  song: Song;
+  index: number;
+  isActive: boolean;
+  isPlaying: boolean;
+  onPlay: () => void;
+}) {
+  return (
+    <div
+      data-ocid={`trending.item.${index + 1}`}
+      onClick={onPlay}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onPlay();
+      }}
+      tabIndex={0}
+      // biome-ignore lint/a11y/useSemanticElements: styled card
+      role="button"
+      aria-label={`Play ${song.title}`}
+      className="music-card group relative cursor-pointer p-3 outline-none flex-shrink-0"
+      style={{
+        width: "clamp(130px, 14vw, 160px)",
+        background: isActive ? "#282828" : "#181818",
+        boxShadow: isActive
+          ? "0 4px 16px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(29,185,84,0.35)"
+          : "0 4px 16px rgba(0,0,0,0.25)",
+        scrollSnapAlign: "start",
+      }}
+    >
+      <div
+        className={`relative w-full aspect-square rounded-xl mb-3 flex items-center justify-center text-4xl overflow-hidden ${song.colorClass}`}
+      >
+        {isActive && isPlaying ? (
+          <div className="absolute inset-0 bg-black/30 flex items-end justify-center gap-0.5 pb-2">
+            <div className="eq-bar" />
+            <div className="eq-bar" />
+            <div className="eq-bar" />
+          </div>
+        ) : (
+          <span aria-hidden="true">{song.emoji}</span>
+        )}
+        <div
+          className="absolute inset-x-0 bottom-0 h-10 pointer-events-none"
+          style={{
+            background: "linear-gradient(to top, rgba(0,0,0,0.5), transparent)",
+          }}
+        />
+        <div
+          className="play-overlay absolute inset-0 flex items-center justify-center"
+          aria-hidden="true"
+        >
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            style={{
+              background: Accent,
+              boxShadow: "0 4px 20px rgba(29,185,84,0.55)",
+            }}
+          >
+            <Play
+              size={15}
+              fill="#000"
+              stroke="none"
+              className="ml-0.5"
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+      </div>
+      <div
+        className="text-[12px] font-bold truncate mb-0.5"
+        style={{ color: isActive ? Accent : "#fff", letterSpacing: "-0.01em" }}
+      >
+        {song.title}
+      </div>
+      <div className="text-[11px] truncate" style={{ color: SubtleColor }}>
+        {song.artist}
+      </div>
+    </div>
+  );
+}
+
+// ── Featured Card ─────────────────────────────────────────────────────────────
 function FeaturedCard({
   title,
   emoji,
@@ -105,6 +540,7 @@ function FeaturedCard({
   );
 }
 
+// ── Full Song Card ────────────────────────────────────────────────────────────
 function SongCard({
   song,
   index,
@@ -145,7 +581,6 @@ function SongCard({
           : "0 4px 16px rgba(0,0,0,0.25)",
       }}
     >
-      {/* Art area */}
       <div
         className={`relative w-full aspect-square rounded-xl mb-3.5 flex items-center justify-center text-5xl overflow-hidden ${
           !thumbnailUrl ? song.colorClass : ""
@@ -157,6 +592,7 @@ function SongCard({
             src={thumbnailUrl}
             alt={song.title}
             className="w-full h-full object-cover"
+            loading="lazy"
           />
         ) : isActive && isPlaying ? (
           <div className="absolute inset-0 bg-black/30 flex items-end justify-center gap-0.5 pb-2">
@@ -174,14 +610,12 @@ function SongCard({
             <div className="eq-bar" />
           </div>
         )}
-        {/* Bottom gradient on art */}
         <div
           className="absolute inset-x-0 bottom-0 h-12 pointer-events-none"
           style={{
             background: "linear-gradient(to top, rgba(0,0,0,0.5), transparent)",
           }}
         />
-        {/* Centered play button overlay */}
         <div
           className="play-overlay absolute inset-0 flex items-center justify-center"
           aria-hidden="true"
@@ -249,6 +683,7 @@ function SongCard({
   );
 }
 
+// ── Search Input ──────────────────────────────────────────────────────────────
 function SearchInput({
   value,
   onChange,
@@ -264,7 +699,6 @@ function SearchInput({
   const [showDropdown, setShowDropdown] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Fetch top 3 suggestions when typing (debounced 350ms)
   useEffect(() => {
     if (!value.trim()) {
       setSuggestions([]);
@@ -288,7 +722,6 @@ function SearchInput({
     return () => clearTimeout(timer);
   }, [value]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (
@@ -349,8 +782,6 @@ function SearchInput({
         }}
         onBlur={() => setFocused(false)}
       />
-
-      {/* Suggestions dropdown (top 3 quick access) */}
       {showDropdown && value.trim() && (
         <div
           data-ocid="search.popover"
@@ -398,6 +829,7 @@ function SearchInput({
                   alt=""
                   className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
                   style={{ background: "#333" }}
+                  loading="lazy"
                 />
                 <div className="flex-1 min-w-0">
                   <div
@@ -429,6 +861,7 @@ function SearchInput({
   );
 }
 
+// ── YouTube Search Results ────────────────────────────────────────────────────
 function YouTubeSearchResults({
   query,
   currentSongId,
@@ -447,6 +880,7 @@ function YouTubeSearchResults({
   const [ytItems, setYtItems] = useState<YouTubeItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -464,9 +898,15 @@ function YouTubeSearchResults({
       console.log("[YouTubeSearchResults] Got", items.length, "results");
       setYtItems(items);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to load results";
       console.error("[YouTubeSearchResults] Search failed:", e);
-      setError(msg);
+      if (e instanceof FallbackError) {
+        window.open(e.fallbackUrl, "_blank", "noopener,noreferrer");
+        setFallbackUrl(e.fallbackUrl);
+        setError("API limit reached, showing results on YouTube");
+      } else {
+        const msg = e instanceof Error ? e.message : "Failed to load results";
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -482,10 +922,10 @@ function YouTubeSearchResults({
       setYtItems([]);
       setLoading(false);
       setError(null);
+      setFallbackUrl(null);
       return;
     }
 
-    // Debounce 400ms
     timerRef.current = setTimeout(() => {
       runSearch(q);
     }, 400);
@@ -510,26 +950,46 @@ function YouTubeSearchResults({
   }
 
   if (error) {
-    // FIX: Only show error on real API failures. No "check console" copy.
+    const isFallback =
+      error === "API limit reached, showing results on YouTube";
     return (
       <div className="text-center py-16" data-ocid="search.error_state">
-        <div className="text-4xl mb-3">⚠️</div>
+        <div className="text-4xl mb-3">{isFallback ? "🔗" : "⚠️"}</div>
         <div
           className="text-[14px] font-semibold mb-2"
-          style={{ color: "#e05555" }}
+          style={{ color: isFallback ? "#1DB954" : "#e05555" }}
         >
-          Could not load results
+          {isFallback
+            ? "API limit reached, showing results on YouTube"
+            : "Could not load results"}
         </div>
-        <div
-          className="text-[12px] max-w-xs mx-auto"
-          style={{ color: SubtleColor }}
-        >
-          {error.includes("quota") || error.includes("403")
-            ? "Your YouTube API quota has been reached. Try again tomorrow or use a different API key."
-            : error.includes("Network") || error.includes("fetch")
-              ? "Could not reach YouTube. Check your internet connection or disable any ad blockers."
-              : error}
-        </div>
+        {isFallback && fallbackUrl ? (
+          <div
+            className="text-[12px] max-w-xs mx-auto"
+            style={{ color: SubtleColor }}
+          >
+            Results opened in a new tab.{" "}
+            <a
+              href={fallbackUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#1DB954", textDecoration: "underline" }}
+            >
+              Click here if it didn't open
+            </a>
+          </div>
+        ) : (
+          <div
+            className="text-[12px] max-w-xs mx-auto"
+            style={{ color: SubtleColor }}
+          >
+            {error.includes("quota") || error.includes("403")
+              ? "Your YouTube API quota has been reached. Try again tomorrow or use a different API key."
+              : error.includes("Network") || error.includes("fetch")
+                ? "Could not reach YouTube. Check your internet connection or disable any ad blockers."
+                : error}
+          </div>
+        )}
       </div>
     );
   }
@@ -541,7 +1001,7 @@ function YouTubeSearchResults({
         style={{ color: SubtleColor }}
         data-ocid="search.empty_state"
       >
-        No results found for “{query}”
+        No results found for "{query}"
       </div>
     );
   }
@@ -563,7 +1023,6 @@ function YouTubeSearchResults({
           src: "",
           youtubeId: item.id.videoId,
         };
-        // FIX: isActive now correctly matches YouTube songs via currentSongId
         return (
           <SongCard
             key={song.id}
@@ -590,6 +1049,7 @@ function YouTubeSearchResults({
   );
 }
 
+// ── Main Content ──────────────────────────────────────────────────────────────
 export default function MainContent({
   activeView,
   songs,
@@ -639,7 +1099,6 @@ export default function MainContent({
     onViewChange("search");
   };
 
-  // gradient background per view
   const bgGradient =
     activeView === "home"
       ? "linear-gradient(180deg, #1a2e1a 0%, #121212 320px)"
@@ -651,7 +1110,7 @@ export default function MainContent({
 
   return (
     <div className="main-scroll" style={{ background: bgGradient }}>
-      {/* Top bar */}
+      {/* ── Top Bar ── */}
       <div
         className="sticky top-0 z-10 flex items-center justify-between px-6 py-3.5"
         style={{
@@ -712,7 +1171,6 @@ export default function MainContent({
           </button>
         </div>
 
-        {/* Search always visible in topbar */}
         <SearchInput
           value={searchQuery}
           onChange={(q) => {
@@ -755,18 +1213,26 @@ export default function MainContent({
         </button>
       </div>
 
+      {/* ── Hero Banner (full-width, outside padding) ── */}
+      {activeView === "home" && (
+        <div className="px-4 sm:px-6 pt-4">
+          <HeroBanner onPlay={() => onSongPlay(0)} />
+        </div>
+      )}
+
+      {/* ── Content area ── */}
       <div className="px-6 pb-8">
         <div key={activeView} className="fade-in">
           {activeView === "home" && (
             <>
-              <motion.h1
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-[28px] font-extrabold text-white mb-4 mt-4"
-                style={{ letterSpacing: "-0.03em" }}
+              <p
+                className="text-[12px] font-medium mt-6 mb-4"
+                style={{ color: SubtleColor }}
               >
                 {getGreeting()}
-              </motion.h1>
+              </p>
+
+              {/* Quick access featured cards */}
               <section className="mb-8">
                 <div
                   className="grid gap-2"
@@ -785,36 +1251,54 @@ export default function MainContent({
                   ))}
                 </div>
               </section>
-              <section className="mb-8">
-                <h2
-                  className="text-[20px] font-bold text-white mb-4"
-                  style={{ letterSpacing: "-0.02em" }}
-                >
-                  Trending Now
-                </h2>
-                <div
-                  className="grid gap-4"
-                  style={{
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(160px, 1fr))",
-                  }}
-                  data-ocid="trending.list"
-                >
-                  {songs.slice(0, 6).map((song, i) => (
-                    <SongCard
-                      key={song.id}
-                      song={song}
-                      index={i}
-                      isActive={currentSongId === song.id}
-                      isPlaying={isPlaying}
-                      isLiked={likedIds.has(song.id)}
-                      onPlay={() => onSongPlay(i)}
-                      onToggleLike={() => onToggleLike(song.id)}
-                      ocidPrefix="trending"
-                    />
-                  ))}
-                </div>
-              </section>
+
+              {/* Trending Now horizontal row */}
+              <HorizontalRow title="Trending Now">
+                {songs.slice(0, 6).map((song, i) => (
+                  <HorizSongCard
+                    key={song.id}
+                    song={song}
+                    index={i}
+                    isActive={currentSongId === song.id}
+                    isPlaying={isPlaying}
+                    onPlay={() => onSongPlay(i)}
+                  />
+                ))}
+              </HorizontalRow>
+
+              {/* Top Bollywood Artists */}
+              <HorizontalRow title="Top Bollywood Artists">
+                {BOLLYWOOD_ARTISTS.map((artist, i) => (
+                  <ArtistCard
+                    key={artist.name}
+                    name={artist.name}
+                    imageUrl={artist.image}
+                    index={i}
+                    onPlay={() => {
+                      onSearchChange(artist.searchQuery);
+                      onViewChange("search");
+                    }}
+                  />
+                ))}
+              </HorizontalRow>
+
+              {/* Top Global Artists */}
+              <HorizontalRow title="Top Global Artists">
+                {HOLLYWOOD_ARTISTS.map((artist, i) => (
+                  <ArtistCard
+                    key={artist.name}
+                    name={artist.name}
+                    imageUrl={artist.image}
+                    index={i}
+                    onPlay={() => {
+                      onSearchChange(artist.searchQuery);
+                      onViewChange("search");
+                    }}
+                  />
+                ))}
+              </HorizontalRow>
+
+              {/* Recently Played */}
               <section>
                 <div className="flex items-center justify-between mb-4">
                   <h2

@@ -1,3 +1,5 @@
+import { getCachedSearch, setCachedSearch } from "./searchCache";
+
 const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as
   | string
   | undefined;
@@ -11,16 +13,35 @@ export interface YouTubeItem {
   };
 }
 
+// Thrown when the API fails and we redirect to YouTube directly
+export class FallbackError extends Error {
+  public readonly fallbackUrl: string;
+  constructor(query: string, reason: string) {
+    super(reason);
+    this.name = "FallbackError";
+    this.fallbackUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+  }
+}
+
 export async function searchYouTube(q: string): Promise<YouTubeItem[]> {
+  const query = q.trim();
+
+  // 1. Check LocalStorage cache first
+  const cached = getCachedSearch(query);
+  if (cached) {
+    return cached.data as YouTubeItem[];
+  }
+
+  // 2. Validate API key before hitting the network
   if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY.trim() === "") {
     throw new Error(
       "YouTube API key is not configured. Search is unavailable.",
     );
   }
 
-  console.log("[searchYouTube] Called with query:", q);
+  console.log("[searchYouTube] Cache MISS -- calling API for:", query);
 
-  const url = `https://youtube.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=5&key=${YOUTUBE_API_KEY}`;
+  const url = `https://youtube.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=10&key=${YOUTUBE_API_KEY}`;
   console.log(
     "[searchYouTube] Fetching URL (key hidden):",
     url.replace(YOUTUBE_API_KEY, "[HIDDEN]"),
@@ -30,12 +51,14 @@ export async function searchYouTube(q: string): Promise<YouTubeItem[]> {
   try {
     res = await fetch(url);
   } catch (networkErr) {
-    console.error("[searchYouTube] Network error (fetch failed):", networkErr);
-    throw new Error(
+    console.error("[searchYouTube] Network error:", networkErr);
+    // Network failure → fallback redirect
+    throw new FallbackError(
+      query,
       `Network error: ${
         networkErr instanceof Error
           ? networkErr.message
-          : "Could not reach YouTube API. Check your internet or ad blocker."
+          : "Could not reach YouTube API."
       }`,
     );
   }
@@ -46,15 +69,16 @@ export async function searchYouTube(q: string): Promise<YouTubeItem[]> {
   try {
     data = await res.json();
   } catch {
-    throw new Error("Failed to parse YouTube API response.");
+    throw new FallbackError(query, "Failed to parse YouTube API response.");
   }
 
   if (data.error) {
     const err = data.error as { message?: string; code?: number };
     const msg = err.message || "YouTube API error";
     console.error("[searchYouTube] API error:", data.error);
-    if (err.code === 403) {
-      throw new Error("Search limit reached. Try again later.");
+    // 403 (quota/forbidden) and 5xx → fallback redirect
+    if (err.code === 403 || (err.code !== undefined && err.code >= 500)) {
+      throw new FallbackError(query, msg);
     }
     throw new Error(msg);
   }
@@ -63,5 +87,11 @@ export async function searchYouTube(q: string): Promise<YouTubeItem[]> {
     ? (data.items as YouTubeItem[])
     : [];
   console.log("[searchYouTube] Returning", items.length, "items");
+
+  // 3. Store successful result in cache
+  if (items.length > 0) {
+    setCachedSearch(query, items);
+  }
+
   return items;
 }

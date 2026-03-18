@@ -86,6 +86,36 @@
   animation: fadeIn 0.28s ease forwards;
 }
 
+/* ── Hero banner zoom animation ── */
+@keyframes heroBannerZoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.05);
+  }
+}
+
+.hero-banner-img {
+  animation: heroBannerZoom 8s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-banner-img {
+    animation: none;
+  }
+}
+
+/* ── Hide scrollbar for horizontal rows ── */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Music card hover effects ── */
 .music-card {
   transition: transform 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease,
@@ -107,6 +137,24 @@
 .music-card:hover .play-overlay {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* ── Artist card hover effects ── */
+.artist-card {
+  transition: transform 0.3s ease;
+}
+
+.artist-card:hover {
+  transform: scale(1.05);
+}
+
+.artist-card-overlay {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.artist-card:hover .artist-card-overlay {
+  opacity: 1;
 }
 
 /* ── Glassmorphism player bar ── */
