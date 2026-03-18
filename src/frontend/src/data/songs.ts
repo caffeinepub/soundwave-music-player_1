@@ -42,7 +42,7 @@ export const colorGradients: Record<string, string> = {
   c6: "linear-gradient(135deg, #3a1a2a, #2a0d0d)",
 };
 
-export const songs: Song[] = [
+const _songs: Song[] = [
   {
     id: "1",
     title: "Midnight Glow",
@@ -152,6 +152,20 @@ export const songs: Song[] = [
     src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3",
   },
 ];
+
+// Safety export: guarantee songs is never empty/undefined
+const FALLBACK_SONG: Song = {
+  id: "fallback-1",
+  title: "Midnight Glow",
+  artist: "Luna Ray",
+  emoji: "🎵",
+  colorClass: "c1",
+  duration: 214,
+  src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+};
+
+export const songs: Song[] =
+  Array.isArray(_songs) && _songs.length > 0 ? _songs : [FALLBACK_SONG];
 
 export const featuredPlaylists: FeaturedPlaylist[] = [
   {

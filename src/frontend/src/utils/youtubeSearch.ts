@@ -12,8 +12,10 @@ export interface YouTubeItem {
 }
 
 export async function searchYouTube(q: string): Promise<YouTubeItem[]> {
-  if (!YOUTUBE_API_KEY) {
-    throw new Error("API key not configured");
+  if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY.trim() === "") {
+    throw new Error(
+      "YouTube API key is not configured. Search is unavailable.",
+    );
   }
 
   console.log("[searchYouTube] Called with query:", q);
@@ -30,21 +32,36 @@ export async function searchYouTube(q: string): Promise<YouTubeItem[]> {
   } catch (networkErr) {
     console.error("[searchYouTube] Network error (fetch failed):", networkErr);
     throw new Error(
-      `Network error: ${networkErr instanceof Error ? networkErr.message : "Could not reach YouTube API. Check your internet or ad blocker."}`,
+      `Network error: ${
+        networkErr instanceof Error
+          ? networkErr.message
+          : "Could not reach YouTube API. Check your internet or ad blocker."
+      }`,
     );
   }
 
   console.log("[searchYouTube] Response status:", res.status);
 
-  const data = await res.json();
+  let data: Record<string, unknown>;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error("Failed to parse YouTube API response.");
+  }
 
   if (data.error) {
-    const msg = data.error.message || "YouTube API error";
+    const err = data.error as { message?: string; code?: number };
+    const msg = err.message || "YouTube API error";
     console.error("[searchYouTube] API error:", data.error);
+    if (err.code === 403) {
+      throw new Error("Search limit reached. Try again later.");
+    }
     throw new Error(msg);
   }
 
-  const items: YouTubeItem[] = data.items ?? [];
+  const items: YouTubeItem[] = Array.isArray(data.items)
+    ? (data.items as YouTubeItem[])
+    : [];
   console.log("[searchYouTube] Returning", items.length, "items");
   return items;
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type Song, songs } from "../data/songs";
+import { type AudioMode, audioEngine } from "../engines/audioEngine";
 
 export type RepeatMode = "none" | "one" | "all";
 
@@ -68,6 +69,7 @@ export interface PlayerState {
   currentMode: "local" | "youtube";
   ytQueue: Song[];
   ytQueueIdx: number;
+  atmosMode: AudioMode;
   showToast: (msg: string) => void;
   playTrack: (idx: number) => void;
   playExternalSong: (song: Song) => void;
@@ -82,6 +84,8 @@ export interface PlayerState {
   setVolume: (v: number) => void;
   toggleMute: () => void;
   clearYtQueue: () => void;
+  toggleAtmos: () => void;
+  setAtmosMode: (mode: AudioMode) => void;
 }
 
 const LS_LIKED = "sw_liked";
@@ -118,6 +122,7 @@ export function usePlayer(): PlayerState {
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
   const [currentMode, setCurrentMode] = useState<"local" | "youtube">("local");
+  const [atmosMode, setAtmosModeState] = useState<AudioMode>("off");
 
   // ── YouTube queue (for search results navigation & auto-advance) ──────────
   const [ytQueue, setYtQueue] = useState<Song[]>([]);
@@ -158,6 +163,8 @@ export function usePlayer(): PlayerState {
   const volumeRef = useRef(volume);
   volumeRef.current = volume;
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const atmosModeRef = useRef<AudioMode>("off");
+  atmosModeRef.current = atmosMode;
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -189,6 +196,10 @@ export function usePlayer(): PlayerState {
       if (!yt) return;
       yt.loadVideoById(song.youtubeId as string);
       yt.setVolume(Math.round(volumeRef.current * 100));
+      // Start Atmos simulation for YouTube
+      if (atmosModeRef.current !== "off") {
+        audioEngine.startYouTubeSimulation(yt);
+      }
     };
 
     if (ytReadyRef.current && ytPlayerRef.current) {
@@ -237,6 +248,7 @@ export function usePlayer(): PlayerState {
         setIsPlaying(false);
         setProgress(0);
         setCurrentTime(0);
+        audioEngine.stopYouTubeSimulation();
       }
       return;
     }
@@ -269,6 +281,13 @@ export function usePlayer(): PlayerState {
     audio.preload = "metadata";
     audio.volume = volumeRef.current;
     audioRef.current = audio;
+
+    // Connect audio engine once — MediaElementAudioSourceNode can only be created once per element
+    try {
+      audioEngine.connectLocalSource(audio);
+    } catch (err) {
+      console.warn("[usePlayer] Failed to connect audio engine:", err);
+    }
 
     const onTimeUpdate = () => {
       if (audio.duration) {
@@ -313,6 +332,10 @@ export function usePlayer(): PlayerState {
             if (pendingYtVideoRef.current) {
               ytPlayerRef.current?.loadVideoById(pendingYtVideoRef.current);
               pendingYtVideoRef.current = null;
+              // Start simulation if mode is on
+              if (atmosModeRef.current !== "off" && ytPlayerRef.current) {
+                audioEngine.startYouTubeSimulation(ytPlayerRef.current);
+              }
             }
           },
           onStateChange: (event) => {
@@ -401,12 +424,16 @@ export function usePlayer(): PlayerState {
         audio.src = "";
       }
       if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+      audioEngine.stopYouTubeSimulation();
 
       const loadYT = () => {
         const yt = ytPlayerRef.current;
         if (!yt) return;
         yt.loadVideoById(song.youtubeId as string);
         yt.setVolume(Math.round(volumeRef.current * 100));
+        if (atmosModeRef.current !== "off") {
+          audioEngine.startYouTubeSimulation(yt);
+        }
       };
 
       if (ytReadyRef.current && ytPlayerRef.current) {
@@ -419,6 +446,7 @@ export function usePlayer(): PlayerState {
       setIsPlaying(true);
     } else {
       activePlayerRef.current = "html5";
+      audioEngine.stopYouTubeSimulation();
       if (ytPlayerRef.current && ytReadyRef.current) {
         try {
           ytPlayerRef.current.stopVideo();
@@ -431,6 +459,15 @@ export function usePlayer(): PlayerState {
       audio.src = song.src;
       audio.load();
       audio.volume = volumeRef.current;
+
+      // Resume AudioContext before playing (browser policy)
+      try {
+        audioEngine.resumeContext();
+      } catch (err) {
+        console.warn("[usePlayer] resumeContext failed:", err);
+      }
+      audioEngine.setMode(atmosModeRef.current);
+
       audio
         .play()
         .then(() => setIsPlaying(true))
@@ -460,12 +497,16 @@ export function usePlayer(): PlayerState {
         audio.src = "";
       }
       if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+      audioEngine.stopYouTubeSimulation();
 
       const loadYT = () => {
         const yt = ytPlayerRef.current;
         if (!yt) return;
         yt.loadVideoById(song.youtubeId as string);
         yt.setVolume(Math.round(volumeRef.current * 100));
+        if (atmosModeRef.current !== "off") {
+          audioEngine.startYouTubeSimulation(yt);
+        }
       };
 
       if (ytReadyRef.current && ytPlayerRef.current) {
@@ -478,6 +519,7 @@ export function usePlayer(): PlayerState {
       setIsPlaying(true);
     } else if (song.src) {
       activePlayerRef.current = "html5";
+      audioEngine.stopYouTubeSimulation();
       if (ytPlayerRef.current && ytReadyRef.current) {
         try {
           ytPlayerRef.current.stopVideo();
@@ -490,6 +532,12 @@ export function usePlayer(): PlayerState {
       audio.src = song.src;
       audio.load();
       audio.volume = volumeRef.current;
+      try {
+        audioEngine.resumeContext();
+      } catch (err) {
+        console.warn("[usePlayer] resumeContext failed:", err);
+      }
+      audioEngine.setMode(atmosModeRef.current);
       audio
         .play()
         .then(() => setIsPlaying(true))
@@ -500,7 +548,6 @@ export function usePlayer(): PlayerState {
   }, []);
 
   // ── playYT: play a YouTube video by ID and title ───────────────────────────
-  // FIX: properly checks ytReadyRef, adds to ytQueue for navigation/auto-advance
   const playYT = useCallback(
     (videoId: string, title: string) => {
       const newSong: Song = {
@@ -518,12 +565,10 @@ export function usePlayer(): PlayerState {
       setYtQueue((prev) => {
         const existingIdx = prev.findIndex((s) => s.youtubeId === videoId);
         if (existingIdx >= 0) {
-          // Song already in queue — just update the index pointer
           ytQueueIdxRef.current = existingIdx;
           setYtQueueIdx(existingIdx);
           return prev;
         }
-        // Append new song to queue
         const next = [...prev, newSong];
         const newIdx = next.length - 1;
         ytQueueIdxRef.current = newIdx;
@@ -552,6 +597,11 @@ export function usePlayer(): PlayerState {
   const togglePlay = useCallback(() => {
     const hasExternal = externalSongRef.current !== null;
     if (currentIdxRef.current < 0 && !hasExternal) {
+      try {
+        audioEngine.resumeContext();
+      } catch (err) {
+        console.warn("[usePlayer] resumeContext failed:", err);
+      }
       playTrackInternal(0);
       return;
     }
@@ -559,18 +609,27 @@ export function usePlayer(): PlayerState {
     if (activePlayerRef.current === "youtube") {
       const yt = ytPlayerRef.current;
       if (!yt) return;
-      // Optimistic UI update immediately, YT events will confirm
+      try {
+        audioEngine.resumeContext();
+      } catch (err) {
+        console.warn("[usePlayer] resumeContext failed:", err);
+      }
       const state = yt.getPlayerState();
       if (window.YT && state === window.YT.PlayerState.PLAYING) {
         yt.pauseVideo();
-        setIsPlaying(false); // optimistic
+        setIsPlaying(false);
       } else {
         yt.playVideo();
-        setIsPlaying(true); // optimistic
+        setIsPlaying(true);
       }
     } else {
       const audio = audioRef.current;
       if (!audio) return;
+      try {
+        audioEngine.resumeContext();
+      } catch (err) {
+        console.warn("[usePlayer] resumeContext failed:", err);
+      }
       if (audio.paused) {
         audio
           .play()
@@ -583,7 +642,6 @@ export function usePlayer(): PlayerState {
     }
   }, [playTrackInternal]);
 
-  // FIX: nextTrack navigates ytQueue when in YouTube mode
   const nextTrack = useCallback(() => {
     if (activePlayerRef.current === "youtube") {
       const queue = ytQueueRef.current;
@@ -595,7 +653,6 @@ export function usePlayer(): PlayerState {
         playYtQueueItem(queue[nextQIdx]);
         return;
       }
-      // No more in queue, fall through to local tracks
     }
     setExternalSong(null);
     const idx = currentIdxRef.current < 0 ? 0 : currentIdxRef.current;
@@ -605,13 +662,11 @@ export function usePlayer(): PlayerState {
     playTrackInternal(next);
   }, [playTrackInternal, playYtQueueItem]);
 
-  // FIX: prevTrack navigates ytQueue when in YouTube mode
   const prevTrack = useCallback(() => {
     if (activePlayerRef.current === "youtube") {
       const yt = ytPlayerRef.current;
       const ct = yt?.getCurrentTime() ?? 0;
       if (ct > 3) {
-        // If more than 3s in, restart current
         yt?.seekTo(0, true);
         setCurrentTime(0);
         setProgress(0);
@@ -626,7 +681,6 @@ export function usePlayer(): PlayerState {
         playYtQueueItem(queue[prevQIdx]);
         return;
       }
-      // At start of queue, restart current
       yt?.seekTo(0, true);
       setCurrentTime(0);
       setProgress(0);
@@ -634,7 +688,6 @@ export function usePlayer(): PlayerState {
     }
 
     const ct = audioRef.current?.currentTime ?? 0;
-
     if (ct > 3) {
       if (audioRef.current) audioRef.current.currentTime = 0;
       return;
@@ -728,6 +781,66 @@ export function usePlayer(): PlayerState {
     }
   }, []);
 
+  // ── Atmos controls ─────────────────────────────────────────────────────────
+  const toggleAtmos = useCallback(() => {
+    try {
+      setAtmosModeState((prev) => {
+        try {
+          const next: AudioMode = prev === "off" ? "atmos" : "off";
+          atmosModeRef.current = next;
+          audioEngine.setMode(next);
+
+          if (
+            activePlayerRef.current === "youtube" &&
+            ytPlayerRef.current &&
+            ytReadyRef.current
+          ) {
+            if (next !== "off") {
+              audioEngine.startYouTubeSimulation(ytPlayerRef.current);
+            } else {
+              audioEngine.stopYouTubeSimulation();
+            }
+          }
+
+          showToast(next === "off" ? "Atmos off" : "Dolby Atmos ON");
+          return next;
+        } catch (err) {
+          console.warn("[usePlayer] toggleAtmos inner failed:", err);
+          audioEngine.safeDisable();
+          return "off" as AudioMode;
+        }
+      });
+    } catch (err) {
+      console.warn("[usePlayer] toggleAtmos failed:", err);
+      audioEngine.safeDisable();
+      setAtmosModeState("off");
+    }
+  }, [showToast]);
+
+  const setAtmosMode = useCallback((mode: AudioMode) => {
+    try {
+      setAtmosModeState(mode);
+      atmosModeRef.current = mode;
+      audioEngine.setMode(mode);
+
+      if (
+        activePlayerRef.current === "youtube" &&
+        ytPlayerRef.current &&
+        ytReadyRef.current
+      ) {
+        if (mode !== "off") {
+          audioEngine.startYouTubeSimulation(ytPlayerRef.current);
+        } else {
+          audioEngine.stopYouTubeSimulation();
+        }
+      }
+    } catch (err) {
+      console.warn("[usePlayer] setAtmosMode failed:", err);
+      audioEngine.safeDisable();
+      setAtmosModeState("off");
+    }
+  }, []);
+
   const currentSong =
     externalSong ?? (currentIdx >= 0 ? songs[currentIdx] : null);
   const isCurrentLiked = currentSong ? likedIds.has(currentSong.id) : false;
@@ -749,6 +862,7 @@ export function usePlayer(): PlayerState {
     currentMode,
     ytQueue,
     ytQueueIdx,
+    atmosMode,
     showToast,
     playTrack,
     playExternalSong,
@@ -763,5 +877,7 @@ export function usePlayer(): PlayerState {
     setVolume,
     toggleMute,
     clearYtQueue,
+    toggleAtmos,
+    setAtmosMode,
   };
 }

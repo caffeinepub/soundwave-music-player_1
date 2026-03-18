@@ -12,7 +12,9 @@ import {
 } from "lucide-react";
 import { useRef } from "react";
 import { type Song, formatTime } from "../data/songs";
+import type { AudioMode } from "../engines/audioEngine";
 import type { RepeatMode } from "../hooks/usePlayer";
+import AtmosToggle from "./AtmosToggle";
 
 interface PlayerBarProps {
   song: Song | null;
@@ -25,6 +27,7 @@ interface PlayerBarProps {
   repeatMode: RepeatMode;
   isLiked: boolean;
   isQueueOpen: boolean;
+  atmosMode: AudioMode;
   onTogglePlay: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -34,6 +37,7 @@ interface PlayerBarProps {
   onToggleRepeat: () => void;
   onToggleLike: () => void;
   onToggleQueue: () => void;
+  onToggleAtmos: () => void;
 }
 
 const Accent = "#1DB954";
@@ -53,6 +57,7 @@ export default function PlayerBar({
   repeatMode,
   isLiked,
   isQueueOpen,
+  atmosMode,
   onTogglePlay,
   onPrev,
   onNext,
@@ -62,6 +67,7 @@ export default function PlayerBar({
   onToggleRepeat,
   onToggleLike,
   onToggleQueue,
+  onToggleAtmos,
 }: PlayerBarProps) {
   const progressRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
@@ -336,11 +342,14 @@ export default function PlayerBar({
         </div>
       </div>
 
-      {/* Right: queue + volume */}
+      {/* Right: atmos + queue + volume */}
       <div
         className="flex items-center gap-3 flex-shrink-0"
-        style={{ width: 200, justifyContent: "flex-end" }}
+        style={{ width: 260, justifyContent: "flex-end" }}
       >
+        {/* Atmos Toggle */}
+        <AtmosToggle mode={atmosMode} onToggle={onToggleAtmos} />
+
         <button
           type="button"
           data-ocid="player.queue.toggle"

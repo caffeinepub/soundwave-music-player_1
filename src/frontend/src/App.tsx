@@ -102,6 +102,7 @@ export default function App() {
         repeatMode={player.repeatMode}
         isLiked={player.isCurrentLiked}
         isQueueOpen={isQueueOpen}
+        atmosMode={player.atmosMode}
         onTogglePlay={player.togglePlay}
         onPrev={player.prevTrack}
         onNext={player.nextTrack}
@@ -111,6 +112,7 @@ export default function App() {
         onToggleRepeat={player.toggleRepeat}
         onToggleLike={player.toggleLike}
         onToggleQueue={() => setIsQueueOpen((prev) => !prev)}
+        onToggleAtmos={player.toggleAtmos}
       />
 
       <QueuePanel
