@@ -86,6 +86,8 @@ export interface PlayerState {
   clearYtQueue: () => void;
   toggleAtmos: () => void;
   setAtmosMode: (mode: AudioMode) => void;
+  pauseHiddenYT: () => void;
+  resumeHiddenYT: (seekTo?: number) => void;
 }
 
 const LS_LIKED = "sw_liked";
@@ -841,6 +843,28 @@ export function usePlayer(): PlayerState {
     }
   }, []);
 
+  // ── pauseHiddenYT / resumeHiddenYT — used by FullScreenPlayer sync ─────────
+  const pauseHiddenYT = useCallback(() => {
+    try {
+      const yt = ytPlayerRef.current;
+      if (yt && ytReadyRef.current) yt.pauseVideo();
+    } catch (err) {
+      console.warn("[usePlayer] pauseHiddenYT failed:", err);
+    }
+  }, []);
+
+  const resumeHiddenYT = useCallback((seekTo?: number) => {
+    try {
+      const yt = ytPlayerRef.current;
+      if (!yt || !ytReadyRef.current) return;
+      if (seekTo !== undefined && seekTo > 0) yt.seekTo(seekTo, true);
+      yt.playVideo();
+      setIsPlaying(true);
+    } catch (err) {
+      console.warn("[usePlayer] resumeHiddenYT failed:", err);
+    }
+  }, []);
+
   const currentSong =
     externalSong ?? (currentIdx >= 0 ? songs[currentIdx] : null);
   const isCurrentLiked = currentSong ? likedIds.has(currentSong.id) : false;
@@ -879,5 +903,7 @@ export function usePlayer(): PlayerState {
     clearYtQueue,
     toggleAtmos,
     setAtmosMode,
+    pauseHiddenYT,
+    resumeHiddenYT,
   };
 }

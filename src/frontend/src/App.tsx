@@ -121,12 +121,20 @@ export default function App() {
         onToggleLike={player.toggleLike}
         onToggleQueue={() => setIsQueueOpen((prev) => !prev)}
         onToggleAtmos={player.toggleAtmos}
-        onExpandPlayer={() => setIsFullScreenPlayerOpen(true)}
+        onExpandPlayer={() => {
+          setIsFullScreenPlayerOpen(true);
+          if (player.currentMode === "youtube") player.pauseHiddenYT();
+        }}
       />
 
       <FullScreenPlayer
         isOpen={isFullScreenPlayerOpen}
-        onClose={() => setIsFullScreenPlayerOpen(false)}
+        onClose={() => {
+          setIsFullScreenPlayerOpen(false);
+          if (player.currentMode === "youtube") player.resumeHiddenYT();
+        }}
+        currentMode={player.currentMode}
+        videoId={player.currentSong?.youtubeId ?? null}
         song={player.currentSong}
         isPlaying={player.isPlaying}
         progress={player.progress}

@@ -42,6 +42,8 @@ interface FullScreenPlayerProps {
   onToggleLike: () => void;
   onToggleQueue: () => void;
   onToggleAtmos: () => void;
+  currentMode?: "local" | "youtube";
+  videoId?: string | null;
 }
 
 const Accent = "#1DB954";
@@ -74,6 +76,8 @@ export default function FullScreenPlayer({
   onToggleLike,
   onToggleQueue,
   onToggleAtmos,
+  currentMode = "local",
+  videoId = null,
 }: FullScreenPlayerProps) {
   const progressRef = useRef<HTMLDivElement>(null);
 
@@ -216,7 +220,7 @@ export default function FullScreenPlayer({
               </button>
             </div>
 
-            {/* Album art */}
+            {/* Album art / YouTube embed */}
             <div
               style={{
                 flex: 1,
@@ -224,34 +228,59 @@ export default function FullScreenPlayer({
                 alignItems: "center",
                 justifyContent: "center",
                 width: "100%",
-                maxHeight: 360,
+                maxHeight: 380,
                 padding: "12px 0",
               }}
             >
-              <div
-                style={{
-                  width: "min(280px, 75vw)",
-                  height: "min(280px, 75vw)",
-                  borderRadius: "50%",
-                  overflow: "hidden",
-                  boxShadow: isPlaying
-                    ? `0 0 60px ${AccentGlow}, 0 8px 40px rgba(0,0,0,0.7)`
-                    : "0 8px 40px rgba(0,0,0,0.7)",
-                  animation: isPlaying
-                    ? "albumRotate 12s linear infinite"
-                    : "none",
-                  transition: "box-shadow 0.4s ease",
-                }}
-                className={`flex items-center justify-center text-7xl ${song?.colorClass ?? ""}`}
-              >
-                {song ? (
-                  <span aria-hidden="true" style={{ fontSize: "4rem" }}>
-                    {song.emoji}
-                  </span>
-                ) : (
-                  <span aria-hidden="true">🎵</span>
-                )}
-              </div>
+              {currentMode === "youtube" && videoId ? (
+                <div
+                  style={{
+                    width: "min(400px, 90vw)",
+                    aspectRatio: "16/9",
+                    borderRadius: 16,
+                    overflow: "hidden",
+                    boxShadow: "0 8px 40px rgba(0,0,0,0.7)",
+                  }}
+                >
+                  <iframe
+                    src={`https://www.youtube.com/embed/${videoId}?autoplay=1&controls=1&rel=0&modestbranding=1&playsinline=1`}
+                    title="YouTube player"
+                    allow="autoplay; encrypted-media; fullscreen"
+                    allowFullScreen
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      border: "none",
+                      display: "block",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div
+                  style={{
+                    width: "min(280px, 75vw)",
+                    height: "min(280px, 75vw)",
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    boxShadow: isPlaying
+                      ? `0 0 60px ${AccentGlow}, 0 8px 40px rgba(0,0,0,0.7)`
+                      : "0 8px 40px rgba(0,0,0,0.7)",
+                    animation: isPlaying
+                      ? "albumRotate 12s linear infinite"
+                      : "none",
+                    transition: "box-shadow 0.4s ease",
+                  }}
+                  className={`flex items-center justify-center text-7xl ${song?.colorClass ?? ""}`}
+                >
+                  {song ? (
+                    <span aria-hidden="true" style={{ fontSize: "4rem" }}>
+                      {song.emoji}
+                    </span>
+                  ) : (
+                    <span aria-hidden="true">🎵</span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Song info + like */}

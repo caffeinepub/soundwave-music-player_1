@@ -1,39 +1,47 @@
 # Soundwave Music Player — Production Upgrade
 
 ## Current State
-- Fully featured Netflix/Spotify-style music player with React/TypeScript frontend and Motoko backend
-- YouTube API called **directly from frontend** via `youtubeSearch.ts` using `VITE_YOUTUBE_API_KEY` env variable
-- API key is exposed in frontend bundle (security issue)
-- Motoko backend has liked songs, display name — no HTTP outcall proxy
-- UI has hero banner, horizontal scroll rows, artist cards with YouTube thumbnails, glassmorphism player, full-screen player, Dolby Atmos toggle, intro animation, responsive mobile layout
+- Full-stack app: Motoko backend (YouTube proxy), React/TS/Tailwind frontend
+- YouTube IFrame API used via hidden `#yt-player` div (0x0 off-screen); loadVideoById controls playback
+- PlayerBar shows emoji/color art — not YouTube thumbnails
+- FullScreenPlayer shows blurred bg from YT thumbnail but art center is still emoji
+- FullScreenPlayer does NOT show the actual YouTube iframe/video
+- Netflix-style horizontal scroll rows exist but hero banner is not fully cinematic
+- Search routes through Motoko backend proxy; caching in memory + localStorage
+- Artist playlists hardcoded with YouTube video IDs
+- Dolby Atmos toggle implemented (real Web Audio for local, simulated for YouTube)
+- ErrorBoundary and error states implemented
+- Autoplay is off (playerVars: { autoplay: 0 })
 
 ## Requested Changes (Diff)
 
 ### Add
-- **Motoko HTTP outcall proxy**: `searchYouTube(query: Text) : async Text` — calls YouTube Data API v3 server-side, returns JSON string of results. API key stored securely in canister variable, never exposed to browser.
-- **Backend `setApiKey(key: Text)` admin method** to update the YouTube API key stored in canister
-- **Frontend `backendSearch.ts`**: replaces `youtubeSearch.ts` direct calls — calls `actor.searchYouTube(query)`, falls back to cached results, then final YouTube redirect
-- Hardcoded artist playlists (YouTube video IDs) for Arijit Singh, Shreya Ghoshal, Taylor Swift, The Weeknd — Top Songs + Popular Tracks sections
-- Loading skeleton UI for search results
-- 300ms debounce on search input
-- Clean UI error states (no raw error text)
+- YouTube thumbnail display in PlayerBar art slot (mqdefault fallback to hqdefault)
+- YouTube video visible in FullScreenPlayer via `<iframe>` embed (autoplay=1, controls=0) shown when YT song is active
+- FullScreenPlayer: when YouTube video, show iframe in the art area + background blur from same thumbnail
+- FullScreenPlayer close button prominent, smooth slide-up animation
+- Robust image fallback for all artist cards: maxresdefault → hqdefault → mqdefault → default.jpg
+- Clean error state for search: "Search temporarily unavailable" + link to YouTube search
+- Loading skeleton for search results (already partially exists, verify)
+- Mobile: mini player tap opens FullScreenPlayer (already exists, verify)
 
 ### Modify
-- `youtubeSearch.ts` → routes through Motoko actor instead of direct `youtube.googleapis.com` fetch
-- `MainContent.tsx` → search now calls backend proxy; show skeleton while loading
-- `songs.ts` → add hardcoded YouTube video IDs for curated artist playlists
-- Hero banner: cinematic with real YouTube thumbnails, gradient overlay, zoom animation
-- Artist cards: real thumbnails, hover scale + play overlay + glow shadow
-- Player bar: glassmorphism, smooth progress, expandable full-screen on desktop+mobile
-- UI theme: deep black/dark purple/neon accents, consistent premium styling
+- PlayerBar art: replace emoji div with `<img>` showing YouTube thumbnail when song.youtubeId exists; fallback to emoji for local songs
+- FullScreenPlayer art area: when song.youtubeId, embed `<iframe>` instead of emoji/art card; use 16:9 aspect ratio
+- The #yt-player hidden div: set width/height to 1px minimum but use `visibility:hidden` approach so YouTube IFrame API initializes correctly
+- HeroBanner: ensure it always renders (the topVideoId fallback chain works); add smooth zoom animation
+- Netflix rows: ensure horizontal scroll snap works on mobile; add row labels clearly
+- Search error handling: catch FallbackError and show clean UI with YouTube redirect link
+- Artist cards: use two-level image fallback (maxresdefault → hqdefault with onerror handler)
 
 ### Remove
-- Direct `youtube.googleapis.com` API calls from frontend
-- `VITE_YOUTUBE_API_KEY` env variable dependency in production (key moves to Motoko canister)
+- No features removed; only fixes and upgrades
 
 ## Implementation Plan
-1. Select `http-outcalls` Caffeine component
-2. Generate Motoko code: HTTP outcall to YouTube search API, store API key in canister, `searchYouTube(query)` returns JSON, `setApiKey(key)` admin setter
-3. Frontend: rewrite `youtubeSearch.ts` to call `actor.searchYouTube()` from backend.d.ts bindings; add 300ms debounce; add in-memory + localStorage cache on top
-4. Add curated artist playlist data (hardcoded YouTube video IDs for 4 artists)
-5. Full UI polish pass: hero banner with real thumbnails, horizontal rows, premium cards, glassmorphism player, skeleton loaders, clean error states
+1. PlayerBar.tsx — add thumbnail img when youtubeId set, with onerror fallback to emoji
+2. FullScreenPlayer.tsx — when song.youtubeId, replace art area with embedded `<iframe src="https://www.youtube.com/embed/{id}?autoplay=1&controls=0&rel=0&modestbranding=1">` in a 16:9 container with cover fit; keep background blur behind it
+3. App.tsx — #yt-player: use visibility:hidden + position fixed offscreen to ensure YT API init works; when FullScreenPlayer is open and mode is youtube, pause the hidden player to avoid double audio (the iframe embed in FullScreenPlayer handles playback)
+4. Note on dual audio: when FullScreenPlayer shows embedded iframe with autoplay=1, the hidden YT player must be paused. When FullScreenPlayer closes, resume via hidden YT player. Track this in usePlayer via new `isFullScreenOpen` ref.
+5. MainContent.tsx — fix artist card image fallback chain; verify Netflix rows work
+6. youtubeSearch.ts — improve error UI messaging
+7. CSS — ensure full-screen player slide-up animation is smooth; add mobile tap target sizes
