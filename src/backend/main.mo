@@ -7,7 +7,7 @@ import Outcall "./http-outcalls/outcall";
 actor {
   var displayName : Text = "";
   let likedSongs = Set.empty<Text>();
-  var youtubeApiKey : Text = "AIzaSyCIKGUfeNLQMyprX7_7w_21Vq5YzcDZ9ls";
+  var youtubeApiKey : Text = "AIzaSyDhgBDZP0T6TAcjMztpuK2b23d7BrJ_B_M";
 
   public query func transform(input : Outcall.TransformationInput) : async Outcall.TransformationOutput {
     Outcall.transform(input);
