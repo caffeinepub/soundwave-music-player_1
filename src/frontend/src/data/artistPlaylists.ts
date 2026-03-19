@@ -13,12 +13,32 @@ export interface ArtistPlaylist {
   popularTracks: ArtistSong[];
 }
 
+function cleanVideoId(id: string): string {
+  if (!id) return "";
+  try {
+    if (id.includes("youtube.com") || id.includes("youtu.be")) {
+      const url = new URL(id);
+      return url.searchParams.get("v") || url.pathname.replace("/", "");
+    }
+  } catch {}
+  return id.trim();
+}
+
 function thumb(videoId: string): string {
-  return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+  const cleanId = cleanVideoId(videoId);
+  if (!cleanId) {
+    console.warn("[Thumbnail] Empty videoId passed to thumb()");
+    return "";
+  }
+  const url = `https://img.youtube.com/vi/${cleanId}/hqdefault.jpg`;
+  console.log(`[Thumbnail] Generated: ${url}`);
+  return url;
 }
 
 function song(videoId: string, title: string): ArtistSong {
-  return { videoId, title, thumbnail: thumb(videoId) };
+  const cleanId = cleanVideoId(videoId);
+  const thumbnail = thumb(cleanId);
+  return { videoId: cleanId, title, thumbnail };
 }
 
 export const FEATURED_ARTIST_PLAYLISTS: ArtistPlaylist[] = [

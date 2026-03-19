@@ -15,7 +15,7 @@ import {
   FEATURED_ARTIST_PLAYLISTS,
 } from "../data/artistPlaylists";
 import { type Song, colorGradients, formatTime } from "../data/songs";
-import { useActor } from "../hooks/useActor";
+
 import {
   FallbackError,
   type YouTubeItem,
@@ -105,7 +105,7 @@ const BOLLYWOOD_ARTISTS = [
   },
 ].map((a) => ({
   ...a,
-  image: `https://img.youtube.com/vi/${a.topVideoId}/maxresdefault.jpg`,
+  image: `https://img.youtube.com/vi/${a.topVideoId}/hqdefault.jpg`,
 }));
 
 const HOLLYWOOD_ARTISTS = [
@@ -157,13 +157,13 @@ const HOLLYWOOD_ARTISTS = [
   },
 ].map((a) => ({
   ...a,
-  image: `https://img.youtube.com/vi/${a.topVideoId}/maxresdefault.jpg`,
+  image: `https://img.youtube.com/vi/${a.topVideoId}/hqdefault.jpg`,
 }));
 
 // ── Hero Banner ──────────────────────────────────────────────────────────────
 function HeroBanner({ onPlay }: { onPlay: () => void }) {
   const [imgSrc, setImgSrc] = useState(
-    "https://img.youtube.com/vi/4NRXx6U8ABQ/maxresdefault.jpg",
+    "https://img.youtube.com/vi/4NRXx6U8ABQ/hqdefault.jpg",
   );
 
   return (
@@ -176,6 +176,7 @@ function HeroBanner({ onPlay }: { onPlay: () => void }) {
         alt="The Weeknd - Blinding Lights"
         loading="lazy"
         onError={() => {
+          console.warn("[HeroBanner] maxresdefault failed, trying hqdefault");
           if (imgSrc.includes("maxresdefault")) {
             setImgSrc("https://img.youtube.com/vi/4NRXx6U8ABQ/hqdefault.jpg");
           }
@@ -285,9 +286,19 @@ function ArtistCard({
           loading="lazy"
           className="w-full h-full object-cover"
           onError={() => {
+            console.warn(
+              `[ArtistCard] Image failed to load for "${name}": ${imgSrc}`,
+            );
             if (imgSrc.includes("maxresdefault")) {
-              setImgSrc(imgSrc.replace("maxresdefault", "hqdefault"));
+              const fallback = imgSrc.replace("maxresdefault", "hqdefault");
+              console.log(
+                `[ArtistCard] Trying hqdefault fallback: ${fallback}`,
+              );
+              setImgSrc(fallback);
             } else {
+              console.warn(
+                `[ArtistCard] All image fallbacks exhausted for "${name}", showing emoji placeholder`,
+              );
               setImgFailed(true);
             }
           }}
@@ -644,7 +655,13 @@ function YTResultCard({
             src={item.snippet.thumbnails.medium.url}
             alt={item.snippet.title}
             className="w-full h-full object-cover"
-            onError={() => setImgErr(true)}
+            onError={(e) => {
+              console.warn(
+                "[SearchResult] Thumbnail failed:",
+                (e.target as HTMLImageElement).src,
+              );
+              setImgErr(true);
+            }}
           />
         )}
         {isActive && isPlaying && (
@@ -739,9 +756,19 @@ function FeaturedArtistCard({
             loading="lazy"
             className="w-full h-full object-cover"
             onError={() => {
+              console.warn(
+                `[FeaturedArtistCard] Image failed for "${playlist.name}": ${imgSrc}`,
+              );
               if (imgSrc.includes("maxresdefault")) {
-                setImgSrc(imgSrc.replace("maxresdefault", "hqdefault"));
+                const fallback = imgSrc.replace("maxresdefault", "hqdefault");
+                console.log(
+                  `[FeaturedArtistCard] Trying hqdefault fallback: ${fallback}`,
+                );
+                setImgSrc(fallback);
               } else {
+                console.warn(
+                  `[FeaturedArtistCard] All fallbacks exhausted for "${playlist.name}", showing emoji`,
+                );
                 setImgFailed(true);
               }
             }}
@@ -846,10 +873,27 @@ function FeaturedArtistCard({
                   alt={s.title}
                   className="w-7 h-7 rounded object-cover flex-shrink-0"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = s.thumbnail.replace(
-                      "maxresdefault",
-                      "hqdefault",
+                    const img = e.target as HTMLImageElement;
+                    console.warn(
+                      `[SongThumbnail] Image failed for "${s.title}": ${img.src}`,
                     );
+                    if (img.src.includes("maxresdefault")) {
+                      img.src = s.thumbnail.replace(
+                        "maxresdefault",
+                        "hqdefault",
+                      );
+                    } else {
+                      img.style.display = "none";
+                      const parent = img.parentElement;
+                      if (parent && !parent.querySelector(".thumb-fallback")) {
+                        const fb = document.createElement("div");
+                        fb.className = "thumb-fallback";
+                        fb.style.cssText =
+                          "width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a0a2e,#0a0a1a);font-size:1.2rem;border-radius:6px;";
+                        fb.textContent = "🎵";
+                        parent.appendChild(fb);
+                      }
+                    }
                   }}
                 />
                 <span
@@ -890,10 +934,27 @@ function FeaturedArtistCard({
                   alt={s.title}
                   className="w-7 h-7 rounded object-cover flex-shrink-0"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = s.thumbnail.replace(
-                      "maxresdefault",
-                      "hqdefault",
+                    const img = e.target as HTMLImageElement;
+                    console.warn(
+                      `[SongThumbnail] Image failed for "${s.title}": ${img.src}`,
                     );
+                    if (img.src.includes("maxresdefault")) {
+                      img.src = s.thumbnail.replace(
+                        "maxresdefault",
+                        "hqdefault",
+                      );
+                    } else {
+                      img.style.display = "none";
+                      const parent = img.parentElement;
+                      if (parent && !parent.querySelector(".thumb-fallback")) {
+                        const fb = document.createElement("div");
+                        fb.className = "thumb-fallback";
+                        fb.style.cssText =
+                          "width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a0a2e,#0a0a1a);font-size:1.2rem;border-radius:6px;";
+                        fb.textContent = "🎵";
+                        parent.appendChild(fb);
+                      }
+                    }
                   }}
                 />
                 <span
@@ -916,12 +977,10 @@ function SearchInput({
   value,
   onChange,
   onSuggestionClick,
-  actor,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSuggestionClick: (song: Song) => void;
-  actor: unknown;
 }) {
   const [focused, setFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<YouTubeItem[]>([]);
@@ -939,7 +998,7 @@ function SearchInput({
     setLoadingSuggestions(true);
     const timer = setTimeout(async () => {
       try {
-        const items = await searchYouTube(value, actor);
+        const items = await searchYouTube(value);
         setSuggestions(items.slice(0, 3));
         setShowDropdown(true);
       } catch (_e) {
@@ -950,7 +1009,7 @@ function SearchInput({
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [value, actor]);
+  }, [value]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -1060,6 +1119,13 @@ function SearchInput({
                   alt=""
                   className="w-8 h-8 rounded object-cover flex-shrink-0"
                   aria-hidden="true"
+                  onError={(e) => {
+                    console.warn(
+                      "[SearchResult] Thumbnail failed:",
+                      (e.target as HTMLImageElement).src,
+                    );
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
                 />
                 <div className="flex-1 min-w-0 text-left">
                   <p className="text-[12px] font-medium truncate">
@@ -1092,13 +1158,11 @@ function YouTubeSearchResults({
   query,
   currentSongId,
   isPlaying,
-  actor,
   onPlay,
 }: {
   query: string;
   currentSongId: string | null;
   isPlaying: boolean;
-  actor: unknown;
   onPlay: (item: YouTubeItem) => void;
 }) {
   const [ytItems, setYtItems] = useState<YouTubeItem[]>([]);
@@ -1107,29 +1171,26 @@ function YouTubeSearchResults({
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const runSearch = useCallback(
-    async (q: string) => {
-      setLoading(true);
-      setError(null);
-      setFallbackUrl(null);
-      try {
-        const items = await searchYouTube(q, actor);
-        setYtItems(items);
-        if (items.length === 0) setError("No YouTube results found");
-      } catch (e) {
-        if (e instanceof FallbackError) {
-          setFallbackUrl(e.fallbackUrl);
-          setError("Search temporarily unavailable");
-        } else {
-          setError(e instanceof Error ? e.message : "Search failed");
-        }
-        setYtItems([]);
-      } finally {
-        setLoading(false);
+  const runSearch = useCallback(async (q: string) => {
+    setLoading(true);
+    setError(null);
+    setFallbackUrl(null);
+    try {
+      const items = await searchYouTube(q);
+      setYtItems(items);
+      if (items.length === 0) setError("No YouTube results found");
+    } catch (e) {
+      if (e instanceof FallbackError) {
+        setFallbackUrl(e.fallbackUrl);
+        setError("Search temporarily unavailable");
+      } else {
+        setError(e instanceof Error ? e.message : "Search failed");
       }
-    },
-    [actor],
-  );
+      setYtItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const q = query.trim();
@@ -1260,8 +1321,6 @@ export default function MainContent({
   onViewChange,
   onSearchChange,
 }: MainContentProps) {
-  const { actor } = useActor();
-
   const likedSongs = songs.filter((s) => likedIds.has(s.id));
   const recentSongs = recentIds
     .map((idx) => songs[idx])
@@ -1340,7 +1399,6 @@ export default function MainContent({
           value={searchQuery}
           onChange={onSearchChange}
           onSuggestionClick={handleSuggestionClick}
-          actor={actor}
         />
         {searchQuery && (
           <button
@@ -1374,7 +1432,6 @@ export default function MainContent({
             query={searchQuery}
             currentSongId={currentSongId}
             isPlaying={isPlaying}
-            actor={actor}
             onPlay={handleYTResultPlay}
           />
         )}
