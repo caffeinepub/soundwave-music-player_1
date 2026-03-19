@@ -246,19 +246,17 @@ function HeroBanner({ onPlay }: { onPlay: () => void }) {
   );
 }
 
+// ── Artist image system ──────────────────────────────────────────────────────
+
 // ── Artist Card ──────────────────────────────────────────────────────────────
 function ArtistCard({
   name,
-  imageUrl,
   onPlay,
 }: {
   name: string;
-  imageUrl: string;
+  imageUrl?: string;
   onPlay: () => void;
 }) {
-  const [imgSrc, setImgSrc] = useState(imageUrl);
-  const [imgFailed, setImgFailed] = useState(false);
-
   return (
     <button
       type="button"
@@ -272,38 +270,19 @@ function ArtistCard({
         background: "#1a1a1a",
       }}
     >
-      {imgFailed ? (
-        <div
-          className="w-full h-full flex items-center justify-center text-3xl"
-          style={{ background: "linear-gradient(135deg, #1a0a2e, #0a0a1a)" }}
-        >
-          🎵
-        </div>
-      ) : (
-        <img
-          src={imgSrc}
-          alt={name}
-          loading="lazy"
-          className="w-full h-full object-cover"
-          onError={() => {
-            console.warn(
-              `[ArtistCard] Image failed to load for "${name}": ${imgSrc}`,
-            );
-            if (imgSrc.includes("maxresdefault")) {
-              const fallback = imgSrc.replace("maxresdefault", "hqdefault");
-              console.log(
-                `[ArtistCard] Trying hqdefault fallback: ${fallback}`,
-              );
-              setImgSrc(fallback);
-            } else {
-              console.warn(
-                `[ArtistCard] All image fallbacks exhausted for "${name}", showing emoji placeholder`,
-              );
-              setImgFailed(true);
-            }
-          }}
-        />
-      )}
+      <img
+        src={`https://source.unsplash.com/300x300/?${encodeURIComponent(name)},singer`}
+        alt={name}
+        className="artist-img"
+        loading="lazy"
+        onError={(e) => {
+          const t = e.currentTarget;
+          t.onerror = null;
+          t.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=111&color=00ff88&size=300`;
+          console.log("Artist Image fallback:", name);
+        }}
+        onLoad={() => console.log("Artist Image:", name)}
+      />
       {/* Dark overlay + play */}
       <div
         className="artist-card-overlay absolute inset-0 flex flex-col items-center justify-center gap-2"
@@ -718,9 +697,6 @@ function FeaturedArtistCard({
   isPlaying: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [imgSrc, setImgSrc] = useState(playlist.image);
-  const [imgFailed, setImgFailed] = useState(false);
-
   return (
     <div
       className="flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer"
@@ -742,38 +718,20 @@ function FeaturedArtistCard({
           transition: "aspect-ratio 0.35s",
         }}
       >
-        {imgFailed ? (
-          <div
-            className="w-full h-full flex items-center justify-center text-4xl"
-            style={{ background: "linear-gradient(135deg, #1a0a2e, #0d0020)" }}
-          >
-            {playlist.emoji}
-          </div>
-        ) : (
-          <img
-            src={imgSrc}
-            alt={playlist.name}
-            loading="lazy"
-            className="w-full h-full object-cover"
-            onError={() => {
-              console.warn(
-                `[FeaturedArtistCard] Image failed for "${playlist.name}": ${imgSrc}`,
-              );
-              if (imgSrc.includes("maxresdefault")) {
-                const fallback = imgSrc.replace("maxresdefault", "hqdefault");
-                console.log(
-                  `[FeaturedArtistCard] Trying hqdefault fallback: ${fallback}`,
-                );
-                setImgSrc(fallback);
-              } else {
-                console.warn(
-                  `[FeaturedArtistCard] All fallbacks exhausted for "${playlist.name}", showing emoji`,
-                );
-                setImgFailed(true);
-              }
-            }}
-          />
-        )}
+        <img
+          src={`https://source.unsplash.com/300x300/?${encodeURIComponent(playlist.name)},singer`}
+          alt={playlist.name}
+          className="artist-img w-full h-full object-cover"
+          loading="lazy"
+          style={{ background: "#111", minHeight: "100px" }}
+          onError={(e) => {
+            const t = e.currentTarget;
+            t.onerror = null;
+            t.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist.name)}&background=111&color=00ff88&size=300`;
+            console.log("Artist Image fallback:", playlist.name);
+          }}
+          onLoad={() => console.log("Artist Image:", playlist.name)}
+        />
         <div
           className="absolute inset-0"
           style={{
@@ -1321,6 +1279,27 @@ export default function MainContent({
   onViewChange,
   onSearchChange,
 }: MainContentProps) {
+  // Preload artist images on mount
+  useEffect(() => {
+    const allNames = [
+      ...BOLLYWOOD_ARTISTS.map((a) => a.name),
+      "Taylor Swift",
+      "Ed Sheeran",
+      "The Weeknd",
+      "Justin Bieber",
+      "Billie Eilish",
+      "Ariana Grande",
+      "Drake",
+      "Bruno Mars",
+      "Dua Lipa",
+      "Coldplay",
+    ];
+    for (const n of allNames) {
+      const img = new window.Image();
+      img.src = `https://source.unsplash.com/300x300/?${encodeURIComponent(n)},singer`;
+    }
+  }, []);
+
   const likedSongs = songs.filter((s) => likedIds.has(s.id));
   const recentSongs = recentIds
     .map((idx) => songs[idx])
