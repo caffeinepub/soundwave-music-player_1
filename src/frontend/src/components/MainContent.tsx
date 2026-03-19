@@ -1,19 +1,21 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ChevronLeft,
   ChevronRight,
   Loader2,
   Play,
   Search,
-  User,
+  X,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  type Song,
-  colorGradients,
-  featuredPlaylists,
-  formatTime,
-} from "../data/songs";
+  type ArtistPlaylist,
+  type ArtistSong,
+  FEATURED_ARTIST_PLAYLISTS,
+} from "../data/artistPlaylists";
+import { type Song, colorGradients, formatTime } from "../data/songs";
+import { useActor } from "../hooks/useActor";
 import {
   FallbackError,
   type YouTubeItem,
@@ -39,6 +41,7 @@ interface MainContentProps {
 }
 
 const Accent = "#1DB954";
+const AccentPurple = "oklch(0.6 0.3 280)";
 const SubtleColor = "#b3b3b3";
 const MutedColor = "#6a6a6a";
 
@@ -52,125 +55,131 @@ function getGreeting() {
 const BOLLYWOOD_ARTISTS = [
   {
     name: "Arijit Singh",
-    image: "/assets/generated/artist-arijit-singh.dim_400x400.jpg",
+    topVideoId: "3USBFxVbNp4",
     searchQuery: "Arijit Singh best songs",
   },
   {
     name: "Shreya Ghoshal",
-    image: "/assets/generated/artist-shreya-ghoshal.dim_400x400.jpg",
+    topVideoId: "_LSkIX1BNYQ",
     searchQuery: "Shreya Ghoshal best songs",
   },
   {
     name: "Sonu Nigam",
-    image: "/assets/generated/artist-sonu-nigam.dim_400x400.jpg",
+    topVideoId: "dZBdWqc5gn4",
     searchQuery: "Sonu Nigam hits",
   },
   {
     name: "Armaan Malik",
-    image: "/assets/generated/artist-armaan-malik.dim_400x400.jpg",
+    topVideoId: "2M5esPJDeVg",
     searchQuery: "Armaan Malik songs",
   },
   {
     name: "Neha Kakkar",
-    image: "/assets/generated/artist-neha-kakkar.dim_400x400.jpg",
+    topVideoId: "Qk9aJnrFi_Y",
     searchQuery: "Neha Kakkar hits",
   },
   {
     name: "KK",
-    image: "/assets/generated/artist-kk.dim_400x400.jpg",
+    topVideoId: "fxqBStCPYBk",
     searchQuery: "KK singer best songs",
   },
   {
     name: "Atif Aslam",
-    image: "/assets/generated/artist-atif-aslam.dim_400x400.jpg",
+    topVideoId: "xuR-GgZEMAs",
     searchQuery: "Atif Aslam songs",
   },
   {
     name: "Jubin Nautiyal",
-    image: "/assets/generated/artist-jubin-nautiyal.dim_400x400.jpg",
+    topVideoId: "D8BO5HXJLaU",
     searchQuery: "Jubin Nautiyal songs",
   },
   {
     name: "Mohit Chauhan",
-    image: "/assets/generated/artist-mohit-chauhan.dim_400x400.jpg",
+    topVideoId: "8rJBYmWCeQ4",
     searchQuery: "Mohit Chauhan songs",
   },
   {
     name: "Sunidhi Chauhan",
-    image: "/assets/generated/artist-sunidhi-chauhan.dim_400x400.jpg",
+    topVideoId: "7BDQZ9C9XBs",
     searchQuery: "Sunidhi Chauhan hits",
   },
-];
+].map((a) => ({
+  ...a,
+  image: `https://img.youtube.com/vi/${a.topVideoId}/maxresdefault.jpg`,
+}));
 
 const HOLLYWOOD_ARTISTS = [
   {
     name: "Taylor Swift",
-    image: "/assets/generated/artist-taylor-swift.dim_400x400.jpg",
+    topVideoId: "ApXoWvfEYVU",
     searchQuery: "Taylor Swift hits",
   },
   {
     name: "Ed Sheeran",
-    image: "/assets/generated/artist-ed-sheeran.dim_400x400.jpg",
+    topVideoId: "lp-EO5I60KA",
     searchQuery: "Ed Sheeran best songs",
   },
   {
     name: "Justin Bieber",
-    image: "/assets/generated/artist-justin-bieber.dim_400x400.jpg",
+    topVideoId: "fRh_vgS2dFE",
     searchQuery: "Justin Bieber songs",
   },
   {
     name: "The Weeknd",
-    image: "/assets/generated/artist-the-weeknd.dim_400x400.jpg",
+    topVideoId: "XXYlFuWEuKI",
     searchQuery: "The Weeknd hits",
   },
   {
     name: "Ariana Grande",
-    image: "/assets/generated/artist-ariana-grande.dim_400x400.jpg",
+    topVideoId: "QYh6mYIJG2Y",
     searchQuery: "Ariana Grande songs",
   },
-  {
-    name: "Drake",
-    image: "/assets/generated/artist-drake.dim_400x400.jpg",
-    searchQuery: "Drake best songs",
-  },
+  { name: "Drake", topVideoId: "uxpDa-c-4Mc", searchQuery: "Drake best songs" },
   {
     name: "Billie Eilish",
-    image: "/assets/generated/artist-billie-eilish.dim_400x400.jpg",
+    topVideoId: "H5v3kku4y6Q",
     searchQuery: "Billie Eilish songs",
   },
   {
     name: "Bruno Mars",
-    image: "/assets/generated/artist-bruno-mars.dim_400x400.jpg",
+    topVideoId: "OPf0YbXqDm0",
     searchQuery: "Bruno Mars hits",
   },
   {
     name: "Dua Lipa",
-    image: "/assets/generated/artist-dua-lipa.dim_400x400.jpg",
+    topVideoId: "oygrmJFkg68",
     searchQuery: "Dua Lipa songs",
   },
   {
     name: "Coldplay",
-    image: "/assets/generated/artist-coldplay.dim_400x400.jpg",
+    topVideoId: "dvgZkm1xWPE",
     searchQuery: "Coldplay best songs",
   },
-];
+].map((a) => ({
+  ...a,
+  image: `https://img.youtube.com/vi/${a.topVideoId}/maxresdefault.jpg`,
+}));
 
 // ── Hero Banner ──────────────────────────────────────────────────────────────
-function HeroBanner({
-  onPlay,
-}: {
-  onPlay: () => void;
-}) {
+function HeroBanner({ onPlay }: { onPlay: () => void }) {
+  const [imgSrc, setImgSrc] = useState(
+    "https://img.youtube.com/vi/4NRXx6U8ABQ/maxresdefault.jpg",
+  );
+
   return (
     <div
       className="hero-banner relative w-full overflow-hidden rounded-2xl"
       style={{ height: "clamp(220px, 38vw, 420px)" }}
     >
-      {/* Background image with zoom */}
       <img
-        src="/assets/generated/hero-banner.dim_1920x1080.jpg"
-        alt="Featured artist"
+        src={imgSrc}
+        alt="The Weeknd - Blinding Lights"
         loading="lazy"
+        onError={() => {
+          if (imgSrc.includes("maxresdefault")) {
+            setImgSrc("https://img.youtube.com/vi/4NRXx6U8ABQ/hqdefault.jpg");
+          }
+        }}
         className="hero-banner-img absolute inset-0 w-full h-full object-cover"
         style={{ transformOrigin: "center center" }}
       />
@@ -179,7 +188,7 @@ function HeroBanner({
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.15) 100%)",
+            "linear-gradient(to right, rgba(0,0,0,0.85) 0%, rgba(10,0,20,0.5) 50%, transparent 100%), linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%)",
         }}
       />
       {/* Vignette */}
@@ -187,71 +196,48 @@ function HeroBanner({
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%)",
+            "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)",
         }}
       />
       {/* Content */}
-      <div className="absolute bottom-0 left-0 p-5 sm:p-8 flex flex-col gap-2 sm:gap-3">
-        <span
-          className="inline-flex items-center gap-1.5 self-start px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-widest"
-          style={{
-            background: "rgba(29,185,84,0.18)",
-            color: Accent,
-            border: "1px solid rgba(29,185,84,0.35)",
-          }}
+      <div className="absolute inset-0 flex flex-col justify-end p-8">
+        <div
+          className="text-[11px] font-bold uppercase tracking-[0.2em] mb-2"
+          style={{ color: Accent }}
         >
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-          Trending Artist
-        </span>
+          🎵 Featured Artist
+        </div>
         <h1
-          className="text-white font-extrabold leading-none"
+          className="font-black text-white mb-1"
           style={{
-            fontSize: "clamp(1.5rem, 4vw, 3rem)",
-            letterSpacing: "-0.03em",
+            fontSize: "clamp(1.6rem, 4vw, 3rem)",
+            letterSpacing: "-0.02em",
+            lineHeight: 1.1,
             textShadow: "0 2px 20px rgba(0,0,0,0.8)",
           }}
         >
-          Soundwave Hits
+          Soundwave
         </h1>
         <p
-          className="text-[13px] sm:text-[14px] font-medium"
+          className="mb-5 font-medium"
           style={{
-            color: "rgba(255,255,255,0.65)",
-            textShadow: "0 1px 8px rgba(0,0,0,0.6)",
+            color: SubtleColor,
+            fontSize: "clamp(0.85rem, 1.5vw, 1rem)",
           }}
         >
-          Top Hits · Premium Streaming
+          Premium Music Experience
         </p>
         <button
           type="button"
-          data-ocid="hero.primary_button"
+          data-ocid="hero.play.button"
           onClick={onPlay}
-          aria-label="Play Now"
-          className="inline-flex items-center gap-2 self-start px-5 py-2.5 rounded-full font-bold text-black text-[13px] mt-1 cursor-pointer"
+          className="flex items-center gap-2.5 rounded-full px-6 py-2.5 font-bold text-black text-[14px] w-fit transition-transform hover:scale-105 active:scale-95"
           style={{
             background: Accent,
-            boxShadow: "0 4px 24px rgba(29,185,84,0.45)",
-            transition: "transform 0.2s ease, box-shadow 0.2s ease",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.transform =
-              "scale(1.04)";
-            (e.currentTarget as HTMLButtonElement).style.boxShadow =
-              "0 6px 32px rgba(29,185,84,0.6)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
-            (e.currentTarget as HTMLButtonElement).style.boxShadow =
-              "0 4px 24px rgba(29,185,84,0.45)";
+            boxShadow: "0 0 28px rgba(29,185,84,0.4)",
           }}
         >
-          <Play
-            size={14}
-            fill="#000"
-            stroke="none"
-            aria-hidden="true"
-            className="ml-0.5"
-          />
+          <Play size={16} fill="#000" stroke="none" aria-hidden="true" />
           Play Now
         </button>
       </div>
@@ -259,177 +245,198 @@ function HeroBanner({
   );
 }
 
-// ── Artist Card ───────────────────────────────────────────────────────────────
+// ── Artist Card ──────────────────────────────────────────────────────────────
 function ArtistCard({
   name,
   imageUrl,
   onPlay,
-  index,
 }: {
   name: string;
   imageUrl: string;
   onPlay: () => void;
-  index: number;
 }) {
-  const [imgError, setImgError] = useState(false);
+  const [imgSrc, setImgSrc] = useState(imageUrl);
+  const [imgFailed, setImgFailed] = useState(false);
 
   return (
-    <div
-      data-ocid={`artist.item.${index + 1}`}
+    <button
+      type="button"
+      data-ocid="artist.card"
       onClick={onPlay}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onPlay();
+      className="artist-card flex-shrink-0 rounded-xl overflow-hidden relative cursor-pointer"
+      style={{
+        width: "clamp(130px, 14vw, 180px)",
+        aspectRatio: "1",
+        border: "none",
+        background: "#1a1a1a",
       }}
-      tabIndex={0}
-      // biome-ignore lint/a11y/useSemanticElements: styled card
-      role="button"
-      aria-label={`Play ${name}`}
-      className="artist-card flex-shrink-0 cursor-pointer outline-none"
-      style={{ width: "clamp(120px, 15vw, 160px)" }}
     >
-      {/* Image container */}
-      <div className="relative w-full aspect-square rounded-xl overflow-hidden mb-2">
-        {!imgError ? (
-          <img
-            src={imageUrl}
-            alt={name}
-            loading="lazy"
-            onError={() => setImgError(true)}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div
-            className="w-full h-full flex items-center justify-center text-4xl"
-            style={{ background: "linear-gradient(135deg, #1a1a2e, #2a1a3a)" }}
-          >
-            🎵
-          </div>
-        )}
-        {/* Hover overlay */}
-        <div className="artist-card-overlay absolute inset-0 bg-black/50 flex items-center justify-center">
-          <div
-            className="w-11 h-11 rounded-full flex items-center justify-center"
-            style={{
-              background: Accent,
-              boxShadow: "0 4px 20px rgba(29,185,84,0.6)",
-            }}
-          >
-            <Play
-              size={16}
-              fill="#000"
-              stroke="none"
-              className="ml-0.5"
-              aria-hidden="true"
-            />
-          </div>
+      {imgFailed ? (
+        <div
+          className="w-full h-full flex items-center justify-center text-3xl"
+          style={{ background: "linear-gradient(135deg, #1a0a2e, #0a0a1a)" }}
+        >
+          🎵
+        </div>
+      ) : (
+        <img
+          src={imgSrc}
+          alt={name}
+          loading="lazy"
+          className="w-full h-full object-cover"
+          onError={() => {
+            if (imgSrc.includes("maxresdefault")) {
+              setImgSrc(imgSrc.replace("maxresdefault", "hqdefault"));
+            } else {
+              setImgFailed(true);
+            }
+          }}
+        />
+      )}
+      {/* Dark overlay + play */}
+      <div
+        className="artist-card-overlay absolute inset-0 flex flex-col items-center justify-center gap-2"
+        style={{ background: "rgba(0,0,0,0.55)" }}
+      >
+        <div
+          className="w-11 h-11 rounded-full flex items-center justify-center"
+          style={{ background: Accent }}
+        >
+          <Play size={18} fill="#000" stroke="none" aria-hidden="true" />
         </div>
       </div>
-      <div className="text-white font-bold text-[13px] truncate mb-0.5">
-        {name}
-      </div>
+      {/* Name badge */}
       <div
-        className="text-[11px] font-medium px-2 py-0.5 rounded-full self-start inline-block"
+        className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 pt-6"
         style={{
-          background: "rgba(29,185,84,0.1)",
-          color: Accent,
-          border: "1px solid rgba(29,185,84,0.2)",
+          background:
+            "linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%)",
+        }}
+      >
+        <p
+          className="text-white font-semibold text-[12px] truncate"
+          style={{ letterSpacing: "-0.01em" }}
+        >
+          {name}
+        </p>
+      </div>
+      {/* Top Songs badge */}
+      <div
+        className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide"
+        style={{
+          background: "rgba(29,185,84,0.85)",
+          color: "#000",
         }}
       >
         Top Songs
+      </div>
+    </button>
+  );
+}
+
+// ── Horizontal scrollable row ─────────────────────────────────────────────────
+function HorizontalRow({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (dir: "left" | "right") => {
+    if (!rowRef.current) return;
+    rowRef.current.scrollBy({
+      left: dir === "right" ? 300 : -300,
+      behavior: "smooth",
+    });
+  };
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between mb-4 px-1">
+        <h2
+          className="font-bold text-white"
+          style={{
+            fontSize: "clamp(1rem, 2vw, 1.2rem)",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {title}
+        </h2>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            data-ocid="row.pagination_prev"
+            onClick={() => scroll("left")}
+            className="w-7 h-7 rounded-full flex items-center justify-center transition-colors"
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              color: SubtleColor,
+              border: "none",
+            }}
+          >
+            <ChevronLeft size={14} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            data-ocid="row.pagination_next"
+            onClick={() => scroll("right")}
+            className="w-7 h-7 rounded-full flex items-center justify-center transition-colors"
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              color: SubtleColor,
+              border: "none",
+            }}
+          >
+            <ChevronRight size={14} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+      <div
+        ref={rowRef}
+        className="flex gap-3 overflow-x-auto hide-scrollbar pb-2"
+        style={{ scrollSnapType: "x mandatory" }}
+      >
+        {children}
       </div>
     </div>
   );
 }
 
-// ── Horizontal Row ────────────────────────────────────────────────────────────
-function HorizontalRow({
-  title,
-  onSeeAll,
-  children,
-}: {
-  title: string;
-  onSeeAll?: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="mb-8">
-      <div className="flex items-center justify-between mb-3">
-        <h2
-          className="text-[20px] font-bold text-white"
-          style={{ letterSpacing: "-0.02em" }}
-        >
-          {title}
-        </h2>
-        {onSeeAll && (
-          <button
-            type="button"
-            onClick={onSeeAll}
-            className="text-[12px] font-semibold cursor-pointer hover:text-white transition-colors"
-            style={{ color: SubtleColor, background: "none", border: "none" }}
-          >
-            See All
-          </button>
-        )}
-      </div>
-      <div className="relative">
-        <div
-          className="hide-scrollbar flex gap-4 overflow-x-auto pb-3"
-          style={{
-            scrollSnapType: "x mandatory",
-            WebkitOverflowScrolling: "touch",
-          }}
-        >
-          {children}
-        </div>
-        {/* Right fade gradient */}
-        <div
-          className="absolute right-0 top-0 bottom-3 w-16 pointer-events-none"
-          style={{
-            background: "linear-gradient(to left, #121212, transparent)",
-          }}
-        />
-      </div>
-    </section>
-  );
-}
-
-// ── Small Song Card for horizontal rows ───────────────────────────────────────
+// ── Horizontal song card (small) ─────────────────────────────────────────────
 function HorizSongCard({
   song,
-  index,
   isActive,
   isPlaying,
   onPlay,
 }: {
   song: Song;
-  index: number;
   isActive: boolean;
   isPlaying: boolean;
   onPlay: () => void;
 }) {
   return (
-    <div
-      data-ocid={`trending.item.${index + 1}`}
+    <button
+      type="button"
+      data-ocid="song.card"
       onClick={onPlay}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onPlay();
-      }}
-      tabIndex={0}
-      // biome-ignore lint/a11y/useSemanticElements: styled card
-      role="button"
-      aria-label={`Play ${song.title}`}
-      className="music-card group relative cursor-pointer p-3 outline-none flex-shrink-0"
+      className="music-card flex-shrink-0 flex flex-col rounded-xl overflow-hidden cursor-pointer"
       style={{
-        width: "clamp(130px, 14vw, 160px)",
-        background: isActive ? "#282828" : "#181818",
-        boxShadow: isActive
-          ? "0 4px 16px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(29,185,84,0.35)"
-          : "0 4px 16px rgba(0,0,0,0.25)",
+        width: "clamp(130px, 14vw, 180px)",
+        background: isActive
+          ? "rgba(29,185,84,0.12)"
+          : "rgba(255,255,255,0.04)",
+        border: isActive
+          ? "1px solid rgba(29,185,84,0.3)"
+          : "1px solid rgba(255,255,255,0.06)",
         scrollSnapAlign: "start",
       }}
     >
+      {/* Art */}
       <div
-        className={`relative w-full aspect-square rounded-xl mb-3 flex items-center justify-center text-4xl overflow-hidden ${song.colorClass}`}
+        className={`w-full flex items-center justify-center text-3xl relative overflow-hidden ${song.colorClass}`}
+        style={{ aspectRatio: "1" }}
       >
         {isActive && isPlaying ? (
           <div className="absolute inset-0 bg-black/30 flex items-end justify-center gap-0.5 pb-2">
@@ -440,107 +447,42 @@ function HorizSongCard({
         ) : (
           <span aria-hidden="true">{song.emoji}</span>
         )}
-        <div
-          className="absolute inset-x-0 bottom-0 h-10 pointer-events-none"
-          style={{
-            background: "linear-gradient(to top, rgba(0,0,0,0.5), transparent)",
-          }}
-        />
+        {/* Hover play overlay */}
         <div
           className="play-overlay absolute inset-0 flex items-center justify-center"
-          aria-hidden="true"
+          style={{ background: "rgba(0,0,0,0.5)" }}
         >
           <div
             className="w-10 h-10 rounded-full flex items-center justify-center"
-            style={{
-              background: Accent,
-              boxShadow: "0 4px 20px rgba(29,185,84,0.55)",
-            }}
+            style={{ background: Accent }}
           >
-            <Play
-              size={15}
-              fill="#000"
-              stroke="none"
-              className="ml-0.5"
-              aria-hidden="true"
-            />
+            <Play size={16} fill="#000" stroke="none" aria-hidden="true" />
           </div>
         </div>
       </div>
-      <div
-        className="text-[12px] font-bold truncate mb-0.5"
-        style={{ color: isActive ? Accent : "#fff", letterSpacing: "-0.01em" }}
-      >
-        {song.title}
+      {/* Meta */}
+      <div className="p-2.5">
+        <p
+          className="font-semibold text-[12px] truncate"
+          style={{ color: isActive ? Accent : "#fff" }}
+        >
+          {song.title}
+        </p>
+        <p
+          className="text-[10px] truncate mt-0.5"
+          style={{ color: MutedColor }}
+        >
+          {song.artist}
+        </p>
+        <p className="text-[10px] mt-1" style={{ color: MutedColor }}>
+          {formatTime(song.duration)}
+        </p>
       </div>
-      <div className="text-[11px] truncate" style={{ color: SubtleColor }}>
-        {song.artist}
-      </div>
-    </div>
+    </button>
   );
 }
 
-// ── Featured Card ─────────────────────────────────────────────────────────────
-function FeaturedCard({
-  title,
-  emoji,
-  colorClass,
-  index,
-  onPlay,
-}: {
-  title: string;
-  emoji: string;
-  colorClass: string;
-  index: number;
-  onPlay: () => void;
-}) {
-  return (
-    <motion.button
-      type="button"
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, duration: 0.25 }}
-      data-ocid={`featured.item.${index + 1}`}
-      onClick={onPlay}
-      aria-label={`Play ${title}`}
-      className="group relative flex items-center gap-0 rounded-xl overflow-hidden cursor-pointer text-left w-full"
-      style={{
-        background: "#282828",
-        border: "none",
-        transition: "background 0.2s ease, filter 0.2s ease",
-      }}
-      whileHover={{ filter: "brightness(1.12)" }}
-    >
-      <div
-        className="w-[60px] h-[60px] flex-shrink-0 flex items-center justify-center text-2xl"
-        style={{ background: colorGradients[colorClass] ?? colorGradients.c1 }}
-      >
-        {emoji}
-      </div>
-      <span className="flex-1 px-3.5 text-[13px] font-bold text-white truncate">
-        {title}
-      </span>
-      <div
-        className="absolute right-3 w-9 h-9 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200"
-        style={{
-          background: Accent,
-          boxShadow: "0 4px 16px rgba(29,185,84,0.5)",
-        }}
-        aria-hidden="true"
-      >
-        <Play
-          size={14}
-          fill="#000"
-          stroke="none"
-          className="ml-0.5"
-          aria-hidden="true"
-        />
-      </div>
-    </motion.button>
-  );
-}
-
-// ── Full Song Card ────────────────────────────────────────────────────────────
+// ── Song Card (grid view) ─────────────────────────────────────────────────────
 function SongCard({
   song,
   index,
@@ -549,8 +491,6 @@ function SongCard({
   isLiked,
   onPlay,
   onToggleLike,
-  ocidPrefix,
-  thumbnailUrl,
 }: {
   song: Song;
   index: number;
@@ -559,139 +499,429 @@ function SongCard({
   isLiked: boolean;
   onPlay: () => void;
   onToggleLike: () => void;
-  ocidPrefix: string;
-  thumbnailUrl?: string;
 }) {
+  const [hovered, setHovered] = useState(false);
+
   return (
-    <div
-      data-ocid={`${ocidPrefix}.item.${index + 1}`}
-      onClick={onPlay}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onPlay();
-      }}
-      tabIndex={0}
-      aria-label={`Play ${song.title}`}
-      // biome-ignore lint/a11y/useSemanticElements: styled card
-      role="button"
-      className="music-card group relative cursor-pointer p-3.5 outline-none"
+    <button
+      type="button"
+      data-ocid={`song.item.${index + 1}`}
+      className="music-card flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer group w-full text-left"
       style={{
-        background: isActive ? "#282828" : "#181818",
-        boxShadow: isActive
-          ? "0 4px 16px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(29,185,84,0.35)"
-          : "0 4px 16px rgba(0,0,0,0.25)",
+        background: isActive
+          ? "rgba(29,185,84,0.1)"
+          : hovered
+            ? "rgba(255,255,255,0.06)"
+            : "transparent",
+        border: isActive
+          ? "1px solid rgba(29,185,84,0.2)"
+          : "1px solid transparent",
       }}
+      onClick={onPlay}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
+      {/* Index/playing indicator */}
       <div
-        className={`relative w-full aspect-square rounded-xl mb-3.5 flex items-center justify-center text-5xl overflow-hidden ${
-          !thumbnailUrl ? song.colorClass : ""
-        }`}
-        style={thumbnailUrl ? { background: "#111" } : {}}
+        className="w-5 flex-shrink-0 flex items-center justify-center text-[12px] font-medium"
+        style={{ color: isActive ? Accent : MutedColor }}
       >
-        {thumbnailUrl ? (
-          <img
-            src={thumbnailUrl}
-            alt={song.title}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-        ) : isActive && isPlaying ? (
-          <div className="absolute inset-0 bg-black/30 flex items-end justify-center gap-0.5 pb-2">
+        {isActive && isPlaying ? (
+          <div className="flex items-end gap-0.5 h-4">
             <div className="eq-bar" />
             <div className="eq-bar" />
             <div className="eq-bar" />
           </div>
         ) : (
-          <span aria-hidden="true">{song.emoji}</span>
+          <span>{index + 1}</span>
         )}
-        {isActive && isPlaying && thumbnailUrl && (
-          <div className="absolute inset-0 bg-black/30 flex items-end justify-center gap-0.5 pb-2">
-            <div className="eq-bar" />
-            <div className="eq-bar" />
-            <div className="eq-bar" />
-          </div>
-        )}
-        <div
-          className="absolute inset-x-0 bottom-0 h-12 pointer-events-none"
-          style={{
-            background: "linear-gradient(to top, rgba(0,0,0,0.5), transparent)",
-          }}
-        />
-        <div
-          className="play-overlay absolute inset-0 flex items-center justify-center"
-          aria-hidden="true"
-        >
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center"
-            style={{
-              background: Accent,
-              boxShadow: "0 4px 20px rgba(29,185,84,0.55)",
-            }}
-          >
-            <Play
-              size={18}
-              fill="#000"
-              stroke="none"
-              className="ml-0.5"
-              aria-hidden="true"
-            />
-          </div>
-        </div>
       </div>
+
+      {/* Art */}
       <div
-        className="text-[13px] font-bold truncate mb-1"
-        style={{ color: isActive ? Accent : "#fff", letterSpacing: "-0.01em" }}
+        className={`w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center text-lg relative overflow-hidden ${song.colorClass}`}
       >
-        {song.title}
+        <span aria-hidden="true">{song.emoji}</span>
       </div>
-      <div className="text-[11px] truncate" style={{ color: SubtleColor }}>
-        {song.artist}
+
+      {/* Meta */}
+      <div className="flex-1 min-w-0">
+        <p
+          className="text-[13px] font-semibold truncate"
+          style={{ color: isActive ? Accent : "#fff" }}
+        >
+          {song.title}
+        </p>
+        <p
+          className="text-[11px] truncate mt-0.5"
+          style={{ color: MutedColor }}
+        >
+          {song.artist}
+        </p>
       </div>
-      <div className="flex items-center justify-between mt-2">
+
+      {/* Duration + like */}
+      <div className="flex items-center gap-3 flex-shrink-0">
         <button
           type="button"
-          data-ocid={`${ocidPrefix}.like.${index + 1}`}
+          data-ocid={`song.like.button.${index + 1}`}
           onClick={(e) => {
             e.stopPropagation();
             onToggleLike();
           }}
-          aria-label={isLiked ? "Unlike" : "Like"}
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 cursor-pointer"
+          className="p-1"
           style={{
-            color: isLiked ? Accent : "#888",
+            color: isLiked ? Accent : "transparent",
+            opacity: isLiked || hovered ? 1 : 0,
             background: "none",
             border: "none",
-            transition: "opacity 0.2s ease, color 0.15s ease",
+            transition: "color 0.2s ease, opacity 0.2s ease",
           }}
+          aria-label={isLiked ? "Unlike" : "Like"}
         >
           <svg
             aria-hidden="true"
-            width="13"
-            height="13"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill={isLiked ? "currentColor" : "none"}
-            stroke="currentColor"
+            stroke={isLiked ? "currentColor" : SubtleColor}
             strokeWidth="2"
           >
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
           </svg>
         </button>
         <span className="text-[11px] font-medium" style={{ color: MutedColor }}>
-          {song.duration > 0 ? formatTime(song.duration) : ""}
+          {formatTime(song.duration)}
         </span>
       </div>
+    </button>
+  );
+}
+
+// ── YouTube search result card ────────────────────────────────────────────────
+function YTResultCard({
+  item,
+  isActive,
+  isPlaying,
+  index,
+  onPlay,
+}: {
+  item: YouTubeItem;
+  isActive: boolean;
+  isPlaying: boolean;
+  index: number;
+  onPlay: () => void;
+}) {
+  const [imgErr, setImgErr] = useState(false);
+
+  return (
+    <button
+      type="button"
+      data-ocid={`search.result.item.${index + 1}`}
+      onClick={onPlay}
+      className="music-card flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer w-full text-left"
+      style={{
+        background: isActive ? "rgba(29,185,84,0.1)" : "rgba(255,255,255,0.03)",
+        border: isActive
+          ? "1px solid rgba(29,185,84,0.25)"
+          : "1px solid rgba(255,255,255,0.05)",
+      }}
+    >
+      <div
+        className="flex-shrink-0 rounded-lg overflow-hidden relative"
+        style={{ width: 52, height: 52 }}
+      >
+        {imgErr ? (
+          <div
+            className="w-full h-full flex items-center justify-center text-xl"
+            style={{ background: "#1a1a1a" }}
+          >
+            🎬
+          </div>
+        ) : (
+          <img
+            src={item.snippet.thumbnails.medium.url}
+            alt={item.snippet.title}
+            className="w-full h-full object-cover"
+            onError={() => setImgErr(true)}
+          />
+        )}
+        {isActive && isPlaying && (
+          <div className="absolute inset-0 bg-black/50 flex items-end justify-center gap-0.5 pb-1">
+            <div className="eq-bar" />
+            <div className="eq-bar" />
+            <div className="eq-bar" />
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p
+          className="text-[13px] font-semibold truncate"
+          style={{ color: isActive ? Accent : "#fff" }}
+        >
+          {item.snippet.title}
+        </p>
+        <p
+          className="text-[11px] truncate mt-0.5"
+          style={{ color: MutedColor }}
+        >
+          {item.snippet.channelTitle}
+        </p>
+      </div>
+      <div
+        className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
+        style={{
+          background: isActive ? Accent : "rgba(255,255,255,0.08)",
+        }}
+      >
+        <Play
+          size={13}
+          fill={isActive ? "#000" : "#fff"}
+          stroke="none"
+          aria-hidden="true"
+        />
+      </div>
+    </button>
+  );
+}
+
+// ── Artist playlist section ───────────────────────────────────────────────────
+function FeaturedArtistCard({
+  playlist,
+  onPlayAll,
+  onPlaySong,
+  currentSongId,
+  isPlaying,
+}: {
+  playlist: ArtistPlaylist;
+  onPlayAll: (songs: ArtistSong[]) => void;
+  onPlaySong: (song: ArtistSong) => void;
+  currentSongId: string | null;
+  isPlaying: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [imgSrc, setImgSrc] = useState(playlist.image);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  return (
+    <div
+      className="flex-shrink-0 rounded-2xl overflow-hidden cursor-pointer"
+      style={{
+        width: expanded
+          ? "clamp(280px, 30vw, 360px)"
+          : "clamp(160px, 18vw, 220px)",
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.07)",
+        transition: "width 0.35s cubic-bezier(0.4,0,0.2,1)",
+        scrollSnapAlign: "start",
+      }}
+    >
+      {/* Card header with image */}
+      <div
+        className="relative overflow-hidden"
+        style={{
+          aspectRatio: expanded ? "16/7" : "1",
+          transition: "aspect-ratio 0.35s",
+        }}
+      >
+        {imgFailed ? (
+          <div
+            className="w-full h-full flex items-center justify-center text-4xl"
+            style={{ background: "linear-gradient(135deg, #1a0a2e, #0d0020)" }}
+          >
+            {playlist.emoji}
+          </div>
+        ) : (
+          <img
+            src={imgSrc}
+            alt={playlist.name}
+            loading="lazy"
+            className="w-full h-full object-cover"
+            onError={() => {
+              if (imgSrc.includes("maxresdefault")) {
+                setImgSrc(imgSrc.replace("maxresdefault", "hqdefault"));
+              } else {
+                setImgFailed(true);
+              }
+            }}
+          />
+        )}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.1) 60%)",
+          }}
+        />
+        {/* Name + buttons */}
+        <div className="absolute bottom-0 left-0 right-0 p-3 flex items-end justify-between">
+          <div>
+            <p
+              className="font-bold text-white"
+              style={{
+                fontSize: "clamp(0.85rem, 1.5vw, 1rem)",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {playlist.name}
+            </p>
+            <p className="text-[10px] mt-0.5" style={{ color: SubtleColor }}>
+              {playlist.topSongs.length + playlist.popularTracks.length} songs
+            </p>
+          </div>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              data-ocid="artist.play.button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPlayAll([...playlist.topSongs, ...playlist.popularTracks]);
+              }}
+              className="w-9 h-9 rounded-full flex items-center justify-center transition-transform hover:scale-110"
+              style={{ background: Accent }}
+            >
+              <Play size={14} fill="#000" stroke="none" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              data-ocid="artist.expand.button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpanded((v) => !v);
+              }}
+              className="w-9 h-9 rounded-full flex items-center justify-center transition-transform hover:scale-110"
+              style={{
+                background: expanded
+                  ? "rgba(29,185,84,0.2)"
+                  : "rgba(255,255,255,0.1)",
+                border: expanded
+                  ? "1px solid rgba(29,185,84,0.4)"
+                  : "1px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              <ChevronRight
+                size={14}
+                style={{
+                  color: expanded ? Accent : SubtleColor,
+                  transform: expanded ? "rotate(180deg)" : "none",
+                  transition: "transform 0.3s",
+                }}
+                aria-hidden="true"
+              />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded song list */}
+      {expanded && (
+        <div className="p-3 space-y-0.5">
+          <p
+            className="text-[10px] font-bold uppercase tracking-widest mb-2"
+            style={{ color: MutedColor }}
+          >
+            Top Songs
+          </p>
+          {playlist.topSongs.map((s, i) => {
+            const songId = `yt-${s.videoId}`;
+            const active = currentSongId === songId;
+            return (
+              <button
+                key={s.videoId}
+                type="button"
+                data-ocid={`artist.top_song.item.${i + 1}`}
+                onClick={() => onPlaySong(s)}
+                className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-left transition-colors hover:bg-white/5"
+                style={{ border: "none", background: "transparent" }}
+              >
+                <span
+                  className="text-[11px] w-4 text-center flex-shrink-0 font-medium"
+                  style={{ color: active ? Accent : MutedColor }}
+                >
+                  {active && isPlaying ? "▶" : i + 1}
+                </span>
+                <img
+                  src={s.thumbnail}
+                  alt={s.title}
+                  className="w-7 h-7 rounded object-cover flex-shrink-0"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = s.thumbnail.replace(
+                      "maxresdefault",
+                      "hqdefault",
+                    );
+                  }}
+                />
+                <span
+                  className="text-[12px] font-medium truncate"
+                  style={{ color: active ? Accent : "#fff" }}
+                >
+                  {s.title}
+                </span>
+              </button>
+            );
+          })}
+          <p
+            className="text-[10px] font-bold uppercase tracking-widest mt-3 mb-2"
+            style={{ color: MutedColor }}
+          >
+            Popular Tracks
+          </p>
+          {playlist.popularTracks.map((s, i) => {
+            const songId = `yt-${s.videoId}`;
+            const active = currentSongId === songId;
+            return (
+              <button
+                key={s.videoId}
+                type="button"
+                data-ocid={`artist.popular_track.item.${i + 1}`}
+                onClick={() => onPlaySong(s)}
+                className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-left transition-colors hover:bg-white/5"
+                style={{ border: "none", background: "transparent" }}
+              >
+                <span
+                  className="text-[11px] w-4 text-center flex-shrink-0 font-medium"
+                  style={{ color: active ? Accent : MutedColor }}
+                >
+                  {active && isPlaying ? "▶" : i + 1}
+                </span>
+                <img
+                  src={s.thumbnail}
+                  alt={s.title}
+                  className="w-7 h-7 rounded object-cover flex-shrink-0"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = s.thumbnail.replace(
+                      "maxresdefault",
+                      "hqdefault",
+                    );
+                  }}
+                />
+                <span
+                  className="text-[12px] font-medium truncate"
+                  style={{ color: active ? Accent : "#fff" }}
+                >
+                  {s.title}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Search Input ──────────────────────────────────────────────────────────────
+// ── Search Input (with dropdown suggestions) ──────────────────────────────────
 function SearchInput({
   value,
   onChange,
   onSuggestionClick,
+  actor,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSuggestionClick: (song: Song) => void;
+  actor: unknown;
 }) {
   const [focused, setFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<YouTubeItem[]>([]);
@@ -700,7 +930,7 @@ function SearchInput({
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!value.trim()) {
+    if (!value.trim() || value.trim().length < 3) {
       setSuggestions([]);
       setShowDropdown(false);
       return;
@@ -709,7 +939,7 @@ function SearchInput({
     setLoadingSuggestions(true);
     const timer = setTimeout(async () => {
       try {
-        const items = await searchYouTube(value);
+        const items = await searchYouTube(value, actor);
         setSuggestions(items.slice(0, 3));
         setShowDropdown(true);
       } catch (_e) {
@@ -717,10 +947,10 @@ function SearchInput({
       } finally {
         setLoadingSuggestions(false);
       }
-    }, 350);
+    }, 300);
 
     return () => clearTimeout(timer);
-  }, [value]);
+  }, [value, actor]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -762,10 +992,7 @@ function SearchInput({
         data-ocid="search.input"
         type="text"
         value={value}
-        onChange={(e) => {
-          console.log("[SearchInput] Input changed:", e.target.value);
-          onChange(e.target.value);
-        }}
+        onChange={(e) => onChange(e.target.value)}
         placeholder="Search YouTube…"
         className="w-full rounded-full py-2 pl-9 pr-4 text-[13px] text-white placeholder:text-[#4a4a4a] outline-none"
         style={{
@@ -808,16 +1035,20 @@ function SearchInput({
               <button
                 type="button"
                 key={item.id.videoId}
-                data-ocid="search.button"
+                data-ocid="search.suggestion.button"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   handleSuggestionClick(item);
                 }}
-                className="w-full flex items-center gap-3 px-3.5 py-2.5 transition-colors cursor-pointer text-left"
-                style={{ background: "transparent", border: "none" }}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 transition-colors"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#fff",
+                }}
                 onMouseEnter={(e) => {
                   (e.currentTarget as HTMLButtonElement).style.background =
-                    "rgba(255,255,255,0.06)";
+                    "rgba(255,255,255,0.05)";
                 }}
                 onMouseLeave={(e) => {
                   (e.currentTarget as HTMLButtonElement).style.background =
@@ -827,29 +1058,24 @@ function SearchInput({
                 <img
                   src={item.snippet.thumbnails.medium.url}
                   alt=""
-                  className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
-                  style={{ background: "#333" }}
-                  loading="lazy"
+                  className="w-8 h-8 rounded object-cover flex-shrink-0"
+                  aria-hidden="true"
                 />
-                <div className="flex-1 min-w-0">
-                  <div
-                    className="text-[12px] font-semibold truncate"
-                    style={{ color: "#fff" }}
-                  >
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-[12px] font-medium truncate">
                     {item.snippet.title}
-                  </div>
-                  <div
-                    className="text-[11px] truncate mt-0.5"
-                    style={{ color: SubtleColor }}
+                  </p>
+                  <p
+                    className="text-[10px] truncate"
+                    style={{ color: MutedColor }}
                   >
                     {item.snippet.channelTitle}
-                  </div>
+                  </p>
                 </div>
                 <Play
-                  size={11}
-                  fill={Accent}
-                  stroke="none"
-                  style={{ color: Accent, flexShrink: 0 }}
+                  size={10}
+                  className="flex-shrink-0"
+                  style={{ color: MutedColor }}
                   aria-hidden="true"
                 />
               </button>
@@ -861,190 +1087,159 @@ function SearchInput({
   );
 }
 
-// ── YouTube Search Results ────────────────────────────────────────────────────
+// ── YouTube search results section ────────────────────────────────────────────
 function YouTubeSearchResults({
   query,
   currentSongId,
   isPlaying,
-  likedIds,
+  actor,
   onPlay,
-  onToggleLike,
 }: {
   query: string;
   currentSongId: string | null;
   isPlaying: boolean;
-  likedIds: Set<string>;
-  onPlay: (videoId: string, title: string) => void;
-  onToggleLike: (id: string) => void;
+  actor: unknown;
+  onPlay: (item: YouTubeItem) => void;
 }) {
   const [ytItems, setYtItems] = useState<YouTubeItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const runSearch = useCallback(async (q: string) => {
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
-
-    console.log("[YouTubeSearchResults] Starting search for:", q);
-    setLoading(true);
-    setError(null);
-    setYtItems([]);
-
-    try {
-      const items = await searchYouTube(q);
-      console.log("[YouTubeSearchResults] Got", items.length, "results");
-      setYtItems(items);
-    } catch (e) {
-      console.error("[YouTubeSearchResults] Search failed:", e);
-      if (e instanceof FallbackError) {
-        window.open(e.fallbackUrl, "_blank", "noopener,noreferrer");
-        setFallbackUrl(e.fallbackUrl);
-        setError("API limit reached, showing results on YouTube");
-      } else {
-        const msg = e instanceof Error ? e.message : "Failed to load results";
-        setError(msg);
+  const runSearch = useCallback(
+    async (q: string) => {
+      setLoading(true);
+      setError(null);
+      setFallbackUrl(null);
+      try {
+        const items = await searchYouTube(q, actor);
+        setYtItems(items);
+        if (items.length === 0) setError("No YouTube results found");
+      } catch (e) {
+        if (e instanceof FallbackError) {
+          setFallbackUrl(e.fallbackUrl);
+          setError("Search temporarily unavailable");
+        } else {
+          setError(e instanceof Error ? e.message : "Search failed");
+        }
+        setYtItems([]);
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [actor],
+  );
 
   useEffect(() => {
     const q = query.trim();
-    console.log("[YouTubeSearchResults] Query changed:", q);
-
-    if (timerRef.current) clearTimeout(timerRef.current);
-
-    if (!q) {
+    if (q.length < 3) {
       setYtItems([]);
-      setLoading(false);
       setError(null);
-      setFallbackUrl(null);
+      setLoading(false);
       return;
     }
-
-    timerRef.current = setTimeout(() => {
-      runSearch(q);
-    }, 400);
-
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => runSearch(q), 300);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [query, runSearch]);
 
-  if (loading) {
+  if (query.trim().length < 3) {
     return (
       <div
-        className="flex items-center justify-center py-20 gap-3"
-        data-ocid="search.loading_state"
+        data-ocid="search.empty_state"
+        className="flex flex-col items-center justify-center py-16 gap-3"
       >
-        <Loader2 size={22} className="animate-spin" style={{ color: Accent }} />
-        <span style={{ color: SubtleColor, fontSize: 14 }}>
-          Searching YouTube…
-        </span>
+        <Search size={48} style={{ color: MutedColor }} aria-hidden="true" />
+        <p className="text-[15px] font-semibold" style={{ color: SubtleColor }}>
+          Search for music
+        </p>
+        <p className="text-[13px]" style={{ color: MutedColor }}>
+          Type at least 3 characters to search YouTube
+        </p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div data-ocid="search.loading_state" className="flex flex-col gap-3">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+            <Skeleton className="w-[52px] h-[52px] rounded-lg flex-shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-3 w-3/4" />
+              <Skeleton className="h-2.5 w-1/2" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
 
   if (error) {
-    const isFallback =
-      error === "API limit reached, showing results on YouTube";
     return (
-      <div className="text-center py-16" data-ocid="search.error_state">
-        <div className="text-4xl mb-3">{isFallback ? "🔗" : "⚠️"}</div>
+      <div
+        data-ocid="search.error_state"
+        className="flex flex-col items-center justify-center py-12 gap-4"
+      >
         <div
-          className="text-[14px] font-semibold mb-2"
-          style={{ color: isFallback ? "#1DB954" : "#e05555" }}
+          className="w-14 h-14 rounded-full flex items-center justify-center text-2xl"
+          style={{ background: "rgba(255,60,60,0.1)" }}
         >
-          {isFallback
-            ? "API limit reached, showing results on YouTube"
-            : "Could not load results"}
+          ⚠️
         </div>
-        {isFallback && fallbackUrl ? (
-          <div
-            className="text-[12px] max-w-xs mx-auto"
+        <div className="text-center">
+          <p
+            className="text-[15px] font-semibold mb-1"
             style={{ color: SubtleColor }}
           >
-            Results opened in a new tab.{" "}
+            {error}
+          </p>
+          {fallbackUrl ? (
             <a
               href={fallbackUrl}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: "#1DB954", textDecoration: "underline" }}
+              className="text-[13px] underline"
+              style={{ color: AccentPurple }}
             >
-              Click here if it didn't open
+              View results on YouTube →
             </a>
-          </div>
-        ) : (
-          <div
-            className="text-[12px] max-w-xs mx-auto"
-            style={{ color: SubtleColor }}
-          >
-            {error.includes("quota") || error.includes("403")
-              ? "Your YouTube API quota has been reached. Try again tomorrow or use a different API key."
-              : error.includes("Network") || error.includes("fetch")
-                ? "Could not reach YouTube. Check your internet connection or disable any ad blockers."
-                : error}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (ytItems.length === 0 && query.trim()) {
-    return (
-      <div
-        className="text-center py-16 text-[14px]"
-        style={{ color: SubtleColor }}
-        data-ocid="search.empty_state"
-      >
-        No results found for "{query}"
+          ) : (
+            <button
+              type="button"
+              data-ocid="search.retry.button"
+              onClick={() => runSearch(query.trim())}
+              className="text-[13px] px-4 py-1.5 rounded-full"
+              style={{
+                background: "rgba(255,255,255,0.1)",
+                color: SubtleColor,
+                border: "none",
+              }}
+            >
+              Retry
+            </button>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div
-      className="grid gap-4"
-      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}
-      data-ocid="search.list"
-    >
-      {ytItems.map((item, i) => {
-        const song: Song = {
-          id: `yt-${item.id.videoId}`,
-          title: item.snippet.title,
-          artist: item.snippet.channelTitle,
-          duration: 0,
-          emoji: "🎬",
-          colorClass: "c1",
-          src: "",
-          youtubeId: item.id.videoId,
-        };
-        return (
-          <SongCard
-            key={song.id}
-            song={song}
-            index={i}
-            isActive={currentSongId === song.id}
-            isPlaying={isPlaying}
-            isLiked={likedIds.has(song.id)}
-            onPlay={() => {
-              console.log(
-                "[YouTubeSearchResults] Playing:",
-                item.snippet.title,
-                item.id.videoId,
-              );
-              onPlay(item.id.videoId, item.snippet.title);
-            }}
-            onToggleLike={() => onToggleLike(song.id)}
-            ocidPrefix="search"
-            thumbnailUrl={item.snippet.thumbnails.medium.url}
-          />
-        );
-      })}
+    <div data-ocid="search.list" className="flex flex-col gap-2">
+      {ytItems.map((item, i) => (
+        <YTResultCard
+          key={item.id.videoId}
+          item={item}
+          isActive={currentSongId === `yt-${item.id.videoId}`}
+          isPlaying={isPlaying}
+          index={i}
+          onPlay={() => onPlay(item)}
+        />
+      ))}
     </div>
   );
 }
@@ -1065,16 +1260,15 @@ export default function MainContent({
   onViewChange,
   onSearchChange,
 }: MainContentProps) {
+  const { actor } = useActor();
+
   const likedSongs = songs.filter((s) => likedIds.has(s.id));
   const recentSongs = recentIds
-    .map((idx) => ({ song: songs[idx], idx }))
-    .filter((x) => x.song != null);
+    .map((idx) => songs[idx])
+    .filter(Boolean) as Song[];
 
-  const renderCards = (list: Song[], prefix: string) => (
-    <div
-      className="grid gap-4"
-      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}
-    >
+  const renderCards = (list: Song[]) => (
+    <div className="flex flex-col gap-1">
       {list.map((song, i) => {
         const globalIdx = songs.findIndex((s) => s.id === song.id);
         return (
@@ -1087,7 +1281,6 @@ export default function MainContent({
             isLiked={likedIds.has(song.id)}
             onPlay={() => onSongPlay(globalIdx)}
             onToggleLike={() => onToggleLike(song.id)}
-            ocidPrefix={prefix}
           />
         );
       })}
@@ -1099,392 +1292,247 @@ export default function MainContent({
     onViewChange("search");
   };
 
+  const handleYTResultPlay = (item: YouTubeItem) => {
+    onPlayYT(item.id.videoId, item.snippet.title);
+  };
+
+  const handleFeaturedPlayAll = (artistSongs: ArtistSong[]) => {
+    if (artistSongs.length > 0) {
+      const first = artistSongs[0];
+      onPlayYT(first.videoId, first.title);
+    }
+  };
+
+  const handleFeaturedPlaySong = (s: ArtistSong) => {
+    onPlayYT(s.videoId, s.title);
+  };
+
   const bgGradient =
     activeView === "home"
-      ? "linear-gradient(180deg, #1a2e1a 0%, #121212 320px)"
-      : activeView === "liked"
-        ? "linear-gradient(180deg, #2e1a2e 0%, #121212 320px)"
-        : activeView === "recent"
-          ? "linear-gradient(180deg, #1a1a2e 0%, #121212 320px)"
-          : "#121212";
+      ? "linear-gradient(to bottom, #1a0a2e 0%, #0a0a0f 300px)"
+      : "#0a0a0f";
 
   return (
-    <div className="main-scroll" style={{ background: bgGradient }}>
-      {/* ── Top Bar ── */}
+    <main
+      className="main-scroll"
+      style={{ background: bgGradient }}
+      data-ocid="main.section"
+    >
+      {/* Top bar */}
       <div
-        className="sticky top-0 z-10 flex items-center justify-between px-6 py-3.5"
+        className="sticky top-0 z-30 flex items-center gap-3 px-6 py-3"
         style={{
-          background: "rgba(18,18,18,0.88)",
+          background: "rgba(10,10,15,0.88)",
           backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          borderBottom: "1px solid rgba(255,255,255,0.04)",
+          borderBottom: "1px solid rgba(255,255,255,0.05)",
         }}
       >
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            data-ocid="topbar.back.button"
-            aria-label="Go back"
-            className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              border: "none",
-              color: SubtleColor,
-              transition: "background 0.15s ease, color 0.15s ease",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(255,255,255,0.14)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#fff";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(255,255,255,0.08)";
-              (e.currentTarget as HTMLButtonElement).style.color = SubtleColor;
-            }}
-          >
-            <ChevronLeft size={17} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            data-ocid="topbar.forward.button"
-            aria-label="Go forward"
-            className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              border: "none",
-              color: SubtleColor,
-              transition: "background 0.15s ease, color 0.15s ease",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(255,255,255,0.14)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#fff";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(255,255,255,0.08)";
-              (e.currentTarget as HTMLButtonElement).style.color = SubtleColor;
-            }}
-          >
-            <ChevronRight size={17} aria-hidden="true" />
-          </button>
-        </div>
-
+        <h2
+          className="font-bold text-white text-[15px] flex-shrink-0"
+          style={{ letterSpacing: "-0.01em" }}
+        >
+          {activeView === "home" && getGreeting()}
+          {activeView === "search" && "Search"}
+          {activeView === "liked" && "Liked Songs"}
+          {activeView === "recent" && "Recently Played"}
+        </h2>
         <SearchInput
           value={searchQuery}
-          onChange={(q) => {
-            onSearchChange(q);
-            if (activeView !== "search") onViewChange("search");
-          }}
+          onChange={onSearchChange}
           onSuggestionClick={handleSuggestionClick}
+          actor={actor}
         />
-
-        <button
-          type="button"
-          data-ocid="topbar.user.button"
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer text-white font-semibold text-[12px] flex-shrink-0"
-          style={{
-            background: "rgba(255,255,255,0.08)",
-            border: "none",
-            transition: "background 0.15s ease",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background =
-              "rgba(255,255,255,0.14)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background =
-              "rgba(255,255,255,0.08)";
-          }}
-        >
-          <div
-            className="w-6 h-6 rounded-full flex items-center justify-center"
-            style={{ background: Accent }}
+        {searchQuery && (
+          <button
+            type="button"
+            data-ocid="search.clear.button"
+            onClick={() => onSearchChange("")}
+            className="flex-shrink-0 p-1.5 rounded-full"
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              color: SubtleColor,
+              border: "none",
+            }}
+            aria-label="Clear search"
           >
-            <User
-              size={13}
-              strokeWidth={2.5}
-              aria-hidden="true"
-              style={{ color: "#000" }}
-            />
-          </div>
-          User
-        </button>
+            <X size={13} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
-      {/* ── Hero Banner (full-width, outside padding) ── */}
-      {activeView === "home" && (
-        <div className="px-4 sm:px-6 pt-4">
-          <HeroBanner onPlay={() => onSongPlay(0)} />
-        </div>
-      )}
+      {/* Content */}
+      <motion.div
+        key={activeView}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28 }}
+        className="px-6 pt-5"
+      >
+        {/* ── SEARCH ── */}
+        {activeView === "search" && (
+          <YouTubeSearchResults
+            query={searchQuery}
+            currentSongId={currentSongId}
+            isPlaying={isPlaying}
+            actor={actor}
+            onPlay={handleYTResultPlay}
+          />
+        )}
 
-      {/* ── Content area ── */}
-      <div className="px-6 pb-8">
-        <div key={activeView} className="fade-in">
-          {activeView === "home" && (
-            <>
-              <p
-                className="text-[12px] font-medium mt-6 mb-4"
-                style={{ color: SubtleColor }}
-              >
-                {getGreeting()}
-              </p>
+        {/* ── HOME ── */}
+        {activeView === "home" && (
+          <>
+            {/* Hero banner */}
+            <div className="mb-8">
+              <HeroBanner
+                onPlay={() => {
+                  const weeknd = FEATURED_ARTIST_PLAYLISTS.find(
+                    (a) => a.id === "the-weeknd",
+                  );
+                  if (weeknd) handleFeaturedPlayAll(weeknd.topSongs);
+                }}
+              />
+            </div>
 
-              {/* Quick access featured cards */}
-              <section className="mb-8">
-                <div
-                  className="grid gap-2"
-                  style={{ gridTemplateColumns: "repeat(3, 1fr)" }}
-                  data-ocid="featured.list"
-                >
-                  {featuredPlaylists.map((pl, i) => (
-                    <FeaturedCard
-                      key={pl.id}
-                      title={pl.title}
-                      emoji={pl.emoji}
-                      colorClass={pl.colorClass}
-                      index={i}
-                      onPlay={() => onSongPlay(i % songs.length)}
-                    />
-                  ))}
-                </div>
-              </section>
+            {/* Featured Artist Playlists */}
+            <HorizontalRow title="Featured Artists">
+              {FEATURED_ARTIST_PLAYLISTS.map((pl) => (
+                <FeaturedArtistCard
+                  key={pl.id}
+                  playlist={pl}
+                  onPlayAll={handleFeaturedPlayAll}
+                  onPlaySong={handleFeaturedPlaySong}
+                  currentSongId={currentSongId}
+                  isPlaying={isPlaying}
+                />
+              ))}
+            </HorizontalRow>
 
-              {/* Trending Now horizontal row */}
-              <HorizontalRow title="Trending Now">
-                {songs.slice(0, 6).map((song, i) => (
+            {/* Trending Now (local songs) */}
+            <HorizontalRow title="Trending Now">
+              {songs.slice(0, 8).map((song, i) => (
+                <HorizSongCard
+                  key={song.id}
+                  song={song}
+                  isActive={currentSongId === song.id}
+                  isPlaying={isPlaying}
+                  onPlay={() => onSongPlay(i)}
+                />
+              ))}
+            </HorizontalRow>
+
+            {/* Top Bollywood Artists */}
+            <HorizontalRow title="Top Bollywood Artists">
+              {BOLLYWOOD_ARTISTS.map((a) => (
+                <ArtistCard
+                  key={a.name}
+                  name={a.name}
+                  imageUrl={a.image}
+                  onPlay={() => {
+                    onSearchChange(a.searchQuery);
+                    onViewChange("search");
+                  }}
+                />
+              ))}
+            </HorizontalRow>
+
+            {/* Top Global Artists */}
+            <HorizontalRow title="Top Global Artists">
+              {HOLLYWOOD_ARTISTS.map((a) => (
+                <ArtistCard
+                  key={a.name}
+                  name={a.name}
+                  imageUrl={a.image}
+                  onPlay={() => {
+                    onSearchChange(a.searchQuery);
+                    onViewChange("search");
+                  }}
+                />
+              ))}
+            </HorizontalRow>
+
+            {/* Recently Played */}
+            {recentSongs.length > 0 && (
+              <HorizontalRow title="Recently Played">
+                {recentSongs.map((song) => (
                   <HorizSongCard
                     key={song.id}
                     song={song}
-                    index={i}
                     isActive={currentSongId === song.id}
                     isPlaying={isPlaying}
-                    onPlay={() => onSongPlay(i)}
-                  />
-                ))}
-              </HorizontalRow>
-
-              {/* Top Bollywood Artists */}
-              <HorizontalRow title="Top Bollywood Artists">
-                {BOLLYWOOD_ARTISTS.map((artist, i) => (
-                  <ArtistCard
-                    key={artist.name}
-                    name={artist.name}
-                    imageUrl={artist.image}
-                    index={i}
                     onPlay={() => {
-                      onSearchChange(artist.searchQuery);
-                      onViewChange("search");
+                      const globalIdx = songs.findIndex(
+                        (s) => s.id === song.id,
+                      );
+                      onSongPlay(globalIdx);
                     }}
                   />
                 ))}
               </HorizontalRow>
+            )}
+          </>
+        )}
 
-              {/* Top Global Artists */}
-              <HorizontalRow title="Top Global Artists">
-                {HOLLYWOOD_ARTISTS.map((artist, i) => (
-                  <ArtistCard
-                    key={artist.name}
-                    name={artist.name}
-                    imageUrl={artist.image}
-                    index={i}
-                    onPlay={() => {
-                      onSearchChange(artist.searchQuery);
-                      onViewChange("search");
-                    }}
-                  />
-                ))}
-              </HorizontalRow>
-
-              {/* Recently Played */}
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <h2
-                    className="text-[20px] font-bold text-white"
-                    style={{ letterSpacing: "-0.02em" }}
-                  >
-                    Recently Played
-                  </h2>
-                  <button
-                    type="button"
-                    data-ocid="recent.see_all.button"
-                    onClick={() => onViewChange("recent")}
-                    className="text-[12px] font-semibold cursor-pointer hover:text-white transition-colors"
-                    style={{
-                      color: SubtleColor,
-                      background: "none",
-                      border: "none",
-                    }}
-                  >
-                    See all
-                  </button>
-                </div>
-                {recentSongs.length === 0 ? (
-                  <div
-                    className="text-[14px] mt-4"
-                    style={{ color: SubtleColor }}
-                    data-ocid="recent.home.empty_state"
-                  >
-                    Nothing played yet. Start listening!
-                  </div>
-                ) : (
-                  <div
-                    className="grid gap-4"
-                    style={{
-                      gridTemplateColumns:
-                        "repeat(auto-fill, minmax(160px, 1fr))",
-                    }}
-                    data-ocid="recent.home.list"
-                  >
-                    {recentSongs.slice(0, 6).map(({ song, idx }, i) => (
-                      <SongCard
-                        key={`${song.id}-${i}`}
-                        song={song}
-                        index={i}
-                        isActive={currentSongId === song.id}
-                        isPlaying={isPlaying}
-                        isLiked={likedIds.has(song.id)}
-                        onPlay={() => onSongPlay(idx)}
-                        onToggleLike={() => onToggleLike(song.id)}
-                        ocidPrefix="recent_home"
-                      />
-                    ))}
-                  </div>
-                )}
-              </section>
-            </>
-          )}
-
-          {activeView === "liked" && (
-            <>
-              <motion.h1
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-[26px] font-extrabold text-white mb-6 mt-4"
-                style={{ letterSpacing: "-0.02em" }}
+        {/* ── LIKED SONGS ── */}
+        {activeView === "liked" &&
+          (likedSongs.length === 0 ? (
+            <div
+              data-ocid="liked.empty_state"
+              className="flex flex-col items-center justify-center py-20 gap-4"
+            >
+              <div className="text-5xl">❤️</div>
+              <p
+                className="text-[16px] font-semibold"
+                style={{ color: SubtleColor }}
               >
-                ❤️ Liked Songs
-              </motion.h1>
-              {likedSongs.length === 0 ? (
-                <div
-                  className="text-[14px] mt-8"
-                  style={{ color: SubtleColor }}
-                  data-ocid="liked.empty_state"
-                >
-                  No liked songs yet. Tap ♥ on any song!
-                </div>
-              ) : (
-                renderCards(likedSongs, "liked")
-              )}
-            </>
-          )}
+                No liked songs yet
+              </p>
+              <p className="text-[13px]" style={{ color: MutedColor }}>
+                Hit the heart on any song to save it here
+              </p>
+            </div>
+          ) : (
+            renderCards(likedSongs)
+          ))}
 
-          {activeView === "recent" && (
-            <>
-              <motion.h1
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-[26px] font-extrabold text-white mb-6 mt-4"
-                style={{ letterSpacing: "-0.02em" }}
+        {/* ── RECENTLY PLAYED ── */}
+        {activeView === "recent" &&
+          (recentSongs.length === 0 ? (
+            <div
+              data-ocid="recent.empty_state"
+              className="flex flex-col items-center justify-center py-20 gap-4"
+            >
+              <div className="text-5xl">🕐</div>
+              <p
+                className="text-[16px] font-semibold"
+                style={{ color: SubtleColor }}
               >
-                🕐 Recently Played
-              </motion.h1>
-              {recentSongs.length === 0 ? (
-                <div
-                  className="text-[14px] mt-8"
-                  style={{ color: SubtleColor }}
-                  data-ocid="recent.empty_state"
-                >
-                  Nothing played yet. Start listening!
-                </div>
-              ) : (
-                <div
-                  className="grid gap-4"
-                  style={{
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(160px, 1fr))",
-                  }}
-                  data-ocid="recent.list"
-                >
-                  {recentSongs.map(({ song, idx }, i) => (
-                    <SongCard
-                      key={`${song.id}-${i}`}
-                      song={song}
-                      index={i}
-                      isActive={currentSongId === song.id}
-                      isPlaying={isPlaying}
-                      isLiked={likedIds.has(song.id)}
-                      onPlay={() => onSongPlay(idx)}
-                      onToggleLike={() => onToggleLike(song.id)}
-                      ocidPrefix="recent"
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
+                Nothing played yet
+              </p>
+              <p className="text-[13px]" style={{ color: MutedColor }}>
+                Start listening to see your history here
+              </p>
+            </div>
+          ) : (
+            renderCards(recentSongs)
+          ))}
+      </motion.div>
 
-          {activeView === "search" && (
-            <>
-              <motion.h1
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-[26px] font-extrabold text-white mb-6 mt-4"
-                style={{ letterSpacing: "-0.02em" }}
-              >
-                🔍 Search
-              </motion.h1>
-              {searchQuery.trim() ? (
-                <YouTubeSearchResults
-                  query={searchQuery}
-                  currentSongId={currentSongId}
-                  isPlaying={isPlaying}
-                  likedIds={likedIds}
-                  onPlay={onPlayYT}
-                  onToggleLike={onToggleLike}
-                />
-              ) : (
-                <div
-                  className="text-center py-20"
-                  style={{ color: SubtleColor }}
-                  data-ocid="search.browse_state"
-                >
-                  <div className="text-5xl mb-4">🎵</div>
-                  <div className="text-[15px] font-medium">
-                    Type something to search YouTube
-                  </div>
-                  <div
-                    className="text-[13px] mt-2"
-                    style={{ color: MutedColor }}
-                  >
-                    Find your favorite songs, artists, and more
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      <footer
-        className="px-6 py-5 text-center"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
-      >
-        <p className="text-[11px]" style={{ color: MutedColor }}>
-          &copy; {new Date().getFullYear()}. Built with ❤️ using{" "}
+      {/* Footer */}
+      <footer className="px-6 py-8 mt-4">
+        <p className="text-[11px] text-center" style={{ color: MutedColor }}>
+          © {new Date().getFullYear()}.{" "}
           <a
-            href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`}
+            href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-white transition-colors"
-            style={{ color: Accent }}
+            className="underline"
+            style={{ color: MutedColor }}
           >
-            caffeine.ai
+            Built with ❤️ using caffeine.ai
           </a>
         </p>
       </footer>
-    </div>
+    </main>
   );
 }

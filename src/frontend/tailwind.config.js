@@ -10,12 +10,12 @@ export default {
     container: {
       center: true,
       padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
+      screens: { "2xl": "1400px" },
     },
     extend: {
       fontFamily: {
+        sans: ["Inter", "sans-serif"],
+        display: ["Bricolage Grotesque", "Inter", "sans-serif"],
         figtree: ["Figtree", "sans-serif"],
       },
       colors: {
@@ -77,7 +77,9 @@ export default {
       },
       boxShadow: {
         xs: "0 1px 2px 0 rgba(0,0,0,0.05)",
-        player: "0 -2px 20px rgba(0,0,0,0.5)",
+        player: "0 -4px 30px rgba(0,0,0,0.6)",
+        glow: "0 0 24px oklch(0.75 0.25 140 / 0.4)",
+        "glow-purple": "0 0 24px oklch(0.6 0.3 280 / 0.35)",
       },
       keyframes: {
         "accordion-down": {

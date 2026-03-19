@@ -1,4 +1,5 @@
 import {
+  ChevronUp,
   ListMusic,
   Pause,
   Play,
@@ -38,6 +39,7 @@ interface PlayerBarProps {
   onToggleLike: () => void;
   onToggleQueue: () => void;
   onToggleAtmos: () => void;
+  onExpandPlayer: () => void;
 }
 
 const Accent = "#1DB954";
@@ -68,6 +70,7 @@ export default function PlayerBar({
   onToggleLike,
   onToggleQueue,
   onToggleAtmos,
+  onExpandPlayer,
 }: PlayerBarProps) {
   const progressRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
@@ -107,14 +110,27 @@ export default function PlayerBar({
         className="flex items-center gap-3.5 flex-shrink-0"
         style={{ width: 240 }}
       >
-        {/* Art */}
-        <div
-          className={`rounded-xl flex-shrink-0 flex items-center justify-center text-2xl relative overflow-hidden${song ? ` ${song.colorClass}` : ""}`}
+        {/* Art - clickable to expand */}
+        <button
+          type="button"
+          data-ocid="player.expand.button"
+          onClick={onExpandPlayer}
+          aria-label="Open full screen player"
+          className={`rounded-xl flex-shrink-0 flex items-center justify-center text-2xl relative overflow-hidden cursor-pointer${song ? ` ${song.colorClass}` : ""}`}
           style={{
             width: 58,
             height: 58,
             background: song ? undefined : "#1a1a1a",
             boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
+            border: "none",
+            transition: "transform 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.transform =
+              "scale(1.05)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
           }}
         >
           {isPlaying ? (
@@ -126,7 +142,7 @@ export default function PlayerBar({
           ) : (
             <span aria-hidden="true">{song?.emoji ?? "🎵"}</span>
           )}
-        </div>
+        </button>
         <div className="min-w-0 flex-1">
           <p
             className="text-[13px] font-bold truncate"
@@ -172,6 +188,27 @@ export default function PlayerBar({
           >
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
           </svg>
+        </button>
+        <button
+          type="button"
+          data-ocid="player.open_modal_button"
+          onClick={onExpandPlayer}
+          aria-label="Open full screen player"
+          className="hidden sm:flex flex-shrink-0 p-1.5 cursor-pointer items-center justify-center"
+          style={{
+            color: MutedColor,
+            background: "none",
+            border: "none",
+            transition: "color 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = SubtleColor;
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = MutedColor;
+          }}
+        >
+          <ChevronUp size={15} aria-hidden="true" />
         </button>
       </div>
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import FullScreenPlayer from "./components/FullScreenPlayer";
 import IntroAnimation from "./components/IntroAnimation";
 import MainContent from "./components/MainContent";
 import PlayerBar from "./components/PlayerBar";
@@ -16,6 +17,7 @@ export default function App() {
   );
   const [activeView, setActiveView] = useState<ActiveView>("home");
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [isFullScreenPlayerOpen, setIsFullScreenPlayerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   const player = usePlayer();
@@ -98,6 +100,33 @@ export default function App() {
       />
 
       <PlayerBar
+        song={player.currentSong}
+        isPlaying={player.isPlaying}
+        progress={player.progress}
+        currentTime={player.currentTime}
+        duration={player.duration}
+        volume={player.volume}
+        isShuffled={player.isShuffle}
+        repeatMode={player.repeatMode}
+        isLiked={player.isCurrentLiked}
+        isQueueOpen={isQueueOpen}
+        atmosMode={player.atmosMode}
+        onTogglePlay={player.togglePlay}
+        onPrev={player.prevTrack}
+        onNext={player.nextTrack}
+        onSeek={player.seek}
+        onVolumeChange={player.setVolume}
+        onToggleShuffle={player.toggleShuffle}
+        onToggleRepeat={player.toggleRepeat}
+        onToggleLike={player.toggleLike}
+        onToggleQueue={() => setIsQueueOpen((prev) => !prev)}
+        onToggleAtmos={player.toggleAtmos}
+        onExpandPlayer={() => setIsFullScreenPlayerOpen(true)}
+      />
+
+      <FullScreenPlayer
+        isOpen={isFullScreenPlayerOpen}
+        onClose={() => setIsFullScreenPlayerOpen(false)}
         song={player.currentSong}
         isPlaying={player.isPlaying}
         progress={player.progress}

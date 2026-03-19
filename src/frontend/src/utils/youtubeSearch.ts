@@ -1,9 +1,5 @@
 import { getCachedSearch, setCachedSearch } from "./searchCache";
 
-const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as
-  | string
-  | undefined;
-
 export interface YouTubeItem {
   id: { videoId: string };
   snippet: {
@@ -13,7 +9,7 @@ export interface YouTubeItem {
   };
 }
 
-// Thrown when the API fails and we redirect to YouTube directly
+// Thrown when the backend call fails and we redirect to YouTube directly
 export class FallbackError extends Error {
   public readonly fallbackUrl: string;
   constructor(query: string, reason: string) {
@@ -23,73 +19,95 @@ export class FallbackError extends Error {
   }
 }
 
-export async function searchYouTube(q: string): Promise<YouTubeItem[]> {
+// In-memory cache layer (layer 0 — fastest)
+const memCache = new Map<string, { data: YouTubeItem[]; ts: number }>();
+const MEM_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+// Type for an actor that has the searchYouTube method
+type SearchableActor = {
+  searchYouTube: (q: string) => Promise<string>;
+};
+
+export async function searchYouTube(
+  q: string,
+  actor: unknown,
+): Promise<YouTubeItem[]> {
   const query = q.trim();
 
-  // 1. Check LocalStorage cache first
-  const cached = getCachedSearch(query);
-  if (cached) {
-    return cached.data as YouTubeItem[];
+  // Step 0: In-memory cache
+  const memEntry = memCache.get(query);
+  if (memEntry && Date.now() - memEntry.ts < MEM_TTL_MS) {
+    console.log(`[searchYouTube] Memory cache HIT for "${query}"`);
+    return memEntry.data;
   }
 
-  // 2. Validate API key before hitting the network
-  if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY.trim() === "") {
-    throw new Error(
-      "YouTube API key is not configured. Search is unavailable.",
-    );
+  // Step 1: LocalStorage cache (12h)
+  const lsEntry = getCachedSearch(query);
+  if (lsEntry) {
+    console.log(`[searchYouTube] LocalStorage cache HIT for "${query}"`);
+    const items = lsEntry.data as YouTubeItem[];
+    memCache.set(query, { data: items, ts: Date.now() });
+    return items;
   }
 
-  console.log("[searchYouTube] Cache MISS -- calling API for:", query);
+  // Step 2: Backend proxy via Motoko actor
+  if (!actor) {
+    console.warn("[searchYouTube] Actor not available yet, backend not ready");
+    throw new Error("Search temporarily unavailable — backend is initializing");
+  }
 
-  const url = `https://youtube.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=10&key=${YOUTUBE_API_KEY}`;
-  console.log(
-    "[searchYouTube] Fetching URL (key hidden):",
-    url.replace(YOUTUBE_API_KEY, "[HIDDEN]"),
-  );
-
-  let res: Response;
-  try {
-    res = await fetch(url);
-  } catch (networkErr) {
-    console.error("[searchYouTube] Network error:", networkErr);
-    // Network failure → fallback redirect
+  const searchableActor = actor as SearchableActor;
+  if (typeof searchableActor.searchYouTube !== "function") {
+    console.warn("[searchYouTube] actor.searchYouTube is not a function");
     throw new FallbackError(
       query,
-      `Network error: ${
-        networkErr instanceof Error
-          ? networkErr.message
-          : "Could not reach YouTube API."
-      }`,
+      "Search unavailable — backend not configured",
     );
   }
 
-  console.log("[searchYouTube] Response status:", res.status);
+  console.log(
+    `[searchYouTube] Cache MISS — calling backend proxy for: "${query}"`,
+  );
 
-  let data: Record<string, unknown>;
+  let rawJson: string;
   try {
-    data = await res.json();
+    rawJson = await searchableActor.searchYouTube(query);
+    console.log("[searchYouTube] Backend proxy responded");
+  } catch (err) {
+    console.error("[searchYouTube] Backend call failed:", err);
+    throw new FallbackError(
+      query,
+      err instanceof Error ? err.message : "Backend search failed",
+    );
+  }
+
+  // Step 3: Parse JSON response from backend
+  let data: {
+    items?: YouTubeItem[];
+    error?: { message?: string; code?: number };
+  };
+  try {
+    data = JSON.parse(rawJson);
   } catch {
-    throw new FallbackError(query, "Failed to parse YouTube API response.");
+    console.error("[searchYouTube] Failed to parse backend response");
+    throw new FallbackError(query, "Invalid response from search backend");
   }
 
   if (data.error) {
-    const err = data.error as { message?: string; code?: number };
-    const msg = err.message || "YouTube API error";
-    console.error("[searchYouTube] API error:", data.error);
-    // 403 (quota/forbidden) and 5xx → fallback redirect
-    if (err.code === 403 || (err.code !== undefined && err.code >= 500)) {
-      throw new FallbackError(query, msg);
+    const { message = "YouTube API error", code } = data.error;
+    console.error("[searchYouTube] YouTube API error via backend:", data.error);
+    if (code === 403 || (code !== undefined && code >= 500)) {
+      throw new FallbackError(query, message);
     }
-    throw new Error(msg);
+    throw new Error(message);
   }
 
-  const items: YouTubeItem[] = Array.isArray(data.items)
-    ? (data.items as YouTubeItem[])
-    : [];
-  console.log("[searchYouTube] Returning", items.length, "items");
+  const items: YouTubeItem[] = Array.isArray(data.items) ? data.items : [];
+  console.log(`[searchYouTube] Returning ${items.length} items for "${query}"`);
 
-  // 3. Store successful result in cache
+  // Save to both cache layers
   if (items.length > 0) {
+    memCache.set(query, { data: items, ts: Date.now() });
     setCachedSearch(query, items);
   }
 
