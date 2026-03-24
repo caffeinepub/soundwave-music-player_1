@@ -23,12 +23,17 @@ export class FallbackError extends Error {
 const memCache = new Map<string, { data: YouTubeItem[]; ts: number }>();
 const MEM_TTL_MS = 5 * 60 * 1000;
 
+// Read key from env — never hardcoded
 const YT_API_KEY =
-  (import.meta.env as Record<string, string>).VITE_YOUTUBE_API_KEY ||
-  "AIzaSyCIKGUfeNLQMyprX7_7w_21Vq5YzcDZ9ls";
+  (import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined) ?? "";
 
 async function fetchFromYouTubeAPI(query: string): Promise<YouTubeItem[]> {
-  if (!YT_API_KEY) throw new FallbackError(query, "No API key configured");
+  if (!YT_API_KEY) {
+    console.warn(
+      "[searchYouTube] VITE_YOUTUBE_API_KEY is not set — skipping API call",
+    );
+    throw new FallbackError(query, "YouTube API key not configured");
+  }
 
   console.log(`[searchYouTube] Calling YouTube Data API for "${query}"`);
 
@@ -52,15 +57,12 @@ async function fetchFromYouTubeAPI(query: string): Promise<YouTubeItem[]> {
     const msg = data.error?.message ?? `HTTP ${code}`;
     console.error(`[searchYouTube] API error (${code}): ${msg}`);
 
-    // Quota exceeded
     if (code === 403 && reason === "quotaExceeded") {
       throw new FallbackError(query, "Search limit reached. Try later");
     }
-    // Key invalid / forbidden
     if (code === 400 || code === 403) {
       throw new FallbackError(query, "Search unavailable. Try again later");
     }
-    // Any other error → redirect fallback
     throw new FallbackError(query, msg);
   }
 
@@ -90,7 +92,7 @@ export async function searchYouTube(
     return items;
   }
 
-  // Layer 2: YouTube Data API v3 (direct, from frontend)
+  // Layer 2: YouTube Data API v3
   try {
     const items = await fetchFromYouTubeAPI(query);
     console.log(
@@ -102,11 +104,7 @@ export async function searchYouTube(
     }
     return items;
   } catch (err) {
-    if (err instanceof FallbackError) {
-      // Re-throw so UI can handle redirect
-      throw err;
-    }
-    // Unexpected error → convert to FallbackError
+    if (err instanceof FallbackError) throw err;
     console.error("[searchYouTube] Unexpected error:", err);
     throw new FallbackError(
       query,

@@ -1,4 +1,6 @@
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+import AIChat from "./components/AIChat";
 import FullScreenPlayer from "./components/FullScreenPlayer";
 import IntroAnimation from "./components/IntroAnimation";
 import MainContent from "./components/MainContent";
@@ -11,6 +13,7 @@ import Toast from "./components/Toast";
 import { songs } from "./data/songs";
 import { type AuthUser, useAuth } from "./hooks/useAuth";
 import { usePlayer } from "./hooks/usePlayer";
+import { usePremium } from "./hooks/usePremium";
 
 type ActiveView = "home" | "search" | "liked" | "recent";
 
@@ -32,11 +35,10 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSignIn, setShowSignIn] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
-  const [isPremium, setIsPremium] = useState(
-    () => localStorage.getItem("sw_premium") === "true",
-  );
+  const [showMoreInfo, setShowMoreInfo] = useState(false);
+  const { isPremium, activatePremium, daysLeft } = usePremium();
 
-  const { user, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const player = usePlayer();
 
   // Keyboard shortcuts
@@ -70,23 +72,40 @@ export default function App() {
     setShowSignIn(false);
   };
 
+  if (authLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#0a0a0a",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "column",
+          gap: 16,
+        }}
+      >
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            border: "3px solid rgba(29,185,84,0.3)",
+            borderTopColor: "#1DB954",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <span style={{ color: "#b3b3b3", fontSize: 14 }}>
+          Loading Soundwave\u2026
+        </span>
+        <style>{"@keyframes spin { to { transform: rotate(360deg); } }"}</style>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       {!introSeen && <IntroAnimation onDone={() => setIntroSeen(true)} />}
-
-      {/* YouTube IFrame Player container — hidden, controlled by usePlayer */}
-      <div
-        id="yt-player"
-        style={{
-          position: "fixed",
-          bottom: -200,
-          left: -200,
-          width: 1,
-          height: 1,
-          overflow: "hidden",
-          pointerEvents: "none",
-        }}
-      />
 
       <SignInModal
         isOpen={showSignIn}
@@ -99,14 +118,165 @@ export default function App() {
         isOpen={showPayment}
         plan={PREMIUM_PLAN}
         onClose={() => setShowPayment(false)}
-        onSuccess={() => setIsPremium(true)}
+        onSuccess={activatePremium}
       />
+
+      {/* More Info Modal */}
+      <AnimatePresence>
+        {showMoreInfo && (
+          <motion.div
+            data-ocid="more_info.modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowMoreInfo(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.88)",
+              backdropFilter: "blur(20px)",
+              zIndex: 900,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}
+          >
+            <motion.div
+              initial={{ y: 32, opacity: 0, scale: 0.95 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 32, opacity: 0, scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 280, damping: 28 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "linear-gradient(145deg, #141420, #0e0e1a)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 20,
+                padding: "36px 32px",
+                width: "100%",
+                maxWidth: 480,
+                position: "relative",
+              }}
+            >
+              <button
+                type="button"
+                data-ocid="more_info.close_button"
+                onClick={() => setShowMoreInfo(false)}
+                style={{
+                  position: "absolute",
+                  top: 14,
+                  right: 14,
+                  background: "rgba(255,255,255,0.07)",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: 32,
+                  height: 32,
+                  color: "#b3b3b3",
+                  cursor: "pointer",
+                  fontSize: 15,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                \u2715
+              </button>
+              <div
+                style={{
+                  color: "#1DB954",
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: "0.2em",
+                  marginBottom: 10,
+                }}
+              >
+                \u2726 FEATURED TRACK
+              </div>
+              <h2
+                style={{
+                  color: "#fff",
+                  fontSize: 28,
+                  fontWeight: 900,
+                  letterSpacing: "-0.02em",
+                  marginBottom: 8,
+                }}
+              >
+                Soundwave Premium
+              </h2>
+              <p
+                style={{
+                  color: "rgba(255,255,255,0.6)",
+                  fontSize: 14,
+                  lineHeight: 1.7,
+                  marginBottom: 24,
+                }}
+              >
+                Discover the best curated tracks on Soundwave. Immerse yourself
+                in crystal-clear audio with Dolby Atmos support, an ever-growing
+                library of over 10 million songs, and personalised AI-powered
+                recommendations.
+              </p>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <motion.button
+                  type="button"
+                  data-ocid="more_info.play.button"
+                  whileHover={{
+                    scale: 1.04,
+                    boxShadow: "0 0 32px rgba(29,185,84,0.5)",
+                  }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => {
+                    player.playTrack(0);
+                    setShowMoreInfo(false);
+                  }}
+                  style={{
+                    background: "#1DB954",
+                    border: "none",
+                    borderRadius: 50,
+                    padding: "12px 28px",
+                    color: "#000",
+                    fontWeight: 800,
+                    fontSize: 14,
+                    cursor: "pointer",
+                  }}
+                >
+                  \u25b6\ufe0e Play Now
+                </motion.button>
+                <motion.button
+                  type="button"
+                  data-ocid="more_info.upgrade.button"
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => {
+                    setShowMoreInfo(false);
+                    setShowPayment(true);
+                  }}
+                  style={{
+                    background: "rgba(255,255,255,0.08)",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: 50,
+                    padding: "12px 28px",
+                    color: "#fff",
+                    fontWeight: 700,
+                    fontSize: 14,
+                    cursor: "pointer",
+                    backdropFilter: "blur(8px)",
+                  }}
+                >
+                  Get Premium
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Sidebar
         activeNav={activeView}
         onNavChange={handleNavChange}
         user={user}
         isPremium={isPremium}
+        daysLeft={daysLeft}
         onSignIn={() => setShowSignIn(true)}
         onSignOut={signOut}
         onUpgrade={() => setShowPayment(true)}
@@ -121,8 +291,6 @@ export default function App() {
         recentIds={player.recentIds}
         searchQuery={searchQuery}
         onSongPlay={player.playTrack}
-        onPlayYouTubeSong={player.playExternalSong}
-        onPlayYT={player.playYT}
         onToggleLike={(songId) => {
           const idx = songs.findIndex((s) => s.id === songId);
           if (idx === player.currentIdx) {
@@ -140,6 +308,8 @@ export default function App() {
           setSearchQuery(q);
           if (activeView !== "search") setActiveView("search");
         }}
+        onMoreInfo={() => setShowMoreInfo(true)}
+        onShowToast={player.showToast}
         user={user}
         isPremium={isPremium}
         onShowSignIn={() => setShowSignIn(true)}
@@ -168,20 +338,13 @@ export default function App() {
         onToggleLike={player.toggleLike}
         onToggleQueue={() => setIsQueueOpen((prev) => !prev)}
         onToggleAtmos={player.toggleAtmos}
-        onExpandPlayer={() => {
-          setIsFullScreenPlayerOpen(true);
-          if (player.currentMode === "youtube") player.pauseHiddenYT();
-        }}
+        audioUrl={player.currentSong?.src ?? ""}
+        onExpandPlayer={() => setIsFullScreenPlayerOpen(true)}
       />
 
       <FullScreenPlayer
         isOpen={isFullScreenPlayerOpen}
-        onClose={() => {
-          setIsFullScreenPlayerOpen(false);
-          if (player.currentMode === "youtube") player.resumeHiddenYT();
-        }}
-        currentMode={player.currentMode}
-        videoId={player.currentSong?.youtubeId ?? null}
+        onClose={() => setIsFullScreenPlayerOpen(false)}
         song={player.currentSong}
         isPlaying={player.isPlaying}
         progress={player.progress}
@@ -209,17 +372,14 @@ export default function App() {
         isOpen={isQueueOpen}
         songs={songs}
         currentIdx={player.currentIdx}
-        ytQueue={player.ytQueue}
-        ytQueueIdx={player.ytQueueIdx}
         currentSong={player.currentSong}
         onClose={() => setIsQueueOpen(false)}
         onPlayTrack={player.playTrack}
-        onPlayYT={(song) => {
-          if (song.youtubeId) player.playYT(song.youtubeId, song.title);
-        }}
       />
 
       <Toast message={player.toastMsg} visible={player.toastMsg !== ""} />
+
+      <AIChat />
 
       {/* Mobile bottom nav */}
       <div className="mob-nav">
@@ -230,14 +390,12 @@ export default function App() {
             data-ocid={`mobnav.${v}.button`}
             onClick={() => setActiveView(v)}
             className="mob-btn"
-            style={{
-              color: activeView === v ? "#1DB954" : "#b3b3b3",
-            }}
+            style={{ color: activeView === v ? "#1DB954" : "#b3b3b3" }}
           >
-            {v === "home" && "🏠"}
-            {v === "search" && "🔍"}
-            {v === "liked" && "❤️"}
-            {v === "recent" && "🕐"}
+            {v === "home" && "\uD83C\uDFE0"}
+            {v === "search" && "\uD83D\uDD0D"}
+            {v === "liked" && "\u2764\uFE0F"}
+            {v === "recent" && "\uD83D\uDD50"}
             <span style={{ fontSize: 10 }}>
               {v.charAt(0).toUpperCase() + v.slice(1)}
             </span>

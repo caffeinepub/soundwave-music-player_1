@@ -16,6 +16,7 @@ import { type Song, formatTime } from "../data/songs";
 import type { AudioMode } from "../engines/audioEngine";
 import type { RepeatMode } from "../hooks/usePlayer";
 import AtmosToggle from "./AtmosToggle";
+import WaveformBar from "./WaveformBar";
 
 interface PlayerBarProps {
   song: Song | null;
@@ -40,6 +41,7 @@ interface PlayerBarProps {
   onToggleQueue: () => void;
   onToggleAtmos: () => void;
   onExpandPlayer: () => void;
+  audioUrl?: string;
 }
 
 const Accent = "#1DB954";
@@ -71,6 +73,7 @@ export default function PlayerBar({
   onToggleQueue,
   onToggleAtmos,
   onExpandPlayer,
+  audioUrl,
 }: PlayerBarProps) {
   const progressRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
@@ -93,363 +96,296 @@ export default function PlayerBar({
   };
 
   const handleVolumeKey = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowRight") onVolumeChange(Math.min(1, volume + 0.1));
-    if (e.key === "ArrowLeft") onVolumeChange(Math.max(0, volume - 0.1));
+    if (e.key === "ArrowRight") onVolumeChange(Math.min(1, volume + 0.05));
+    if (e.key === "ArrowLeft") onVolumeChange(Math.max(0, volume - 0.05));
   };
 
-  const displayDuration = duration || (song?.duration ?? 0);
+  const colorGradients: Record<string, string> = {
+    c1: "linear-gradient(135deg, #2d1b69, #1a0e3d)",
+    c2: "linear-gradient(135deg, #1a3a2a, #0d2019)",
+    c3: "linear-gradient(135deg, #3a1a1a, #2a0d0d)",
+    c4: "linear-gradient(135deg, #1a2a3a, #0d1a2a)",
+    c5: "linear-gradient(135deg, #2a2a1a, #1a1a0d)",
+    c6: "linear-gradient(135deg, #3a1a2a, #2a0d0d)",
+  };
+
+  const albumBg = song
+    ? (colorGradients[song.colorClass] ?? colorGradients.c1)
+    : colorGradients.c1;
 
   return (
-    <div
-      className="glass fixed bottom-0 left-0 right-0 z-50 flex items-center px-6 gap-4"
-      style={{ height: "88px" }}
-      data-ocid="player.panel"
-    >
-      {/* Left: now playing */}
+    <div data-ocid="player.panel" className="player-bar">
+      {/* Progress track */}
       <div
-        className="flex items-center gap-3.5 flex-shrink-0"
-        style={{ width: 240 }}
+        ref={progressRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Seek bar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(progress * 100)}
+        className="player-progress-track"
+        onClick={handleProgressClick}
+        onKeyDown={handleProgressKey}
       >
-        {/* Art - clickable to expand */}
-        <button
-          type="button"
-          data-ocid="player.expand.button"
-          onClick={onExpandPlayer}
-          aria-label="Open full screen player"
-          className={`rounded-xl flex-shrink-0 flex items-center justify-center text-2xl relative overflow-hidden cursor-pointer${song ? ` ${song.colorClass}` : ""}`}
+        <div
+          className="player-progress-fill"
           style={{
-            width: 58,
-            height: 58,
-            background: song ? undefined : "#1a1a1a",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-            border: "none",
-            transition: "transform 0.2s ease",
+            width: `${progress * 100}%`,
+            boxShadow: `0 0 8px ${AccentGlow}`,
           }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.transform =
-              "scale(1.05)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
-          }}
-        >
-          {isPlaying ? (
-            <div className="absolute inset-0 bg-black/30 flex items-end justify-center gap-0.5 pb-1.5">
-              <div className="eq-bar" />
-              <div className="eq-bar" />
-              <div className="eq-bar" />
-            </div>
-          ) : (
-            <span aria-hidden="true">{song?.emoji ?? "🎵"}</span>
-          )}
-        </button>
-        <div className="min-w-0 flex-1">
-          <p
-            className="text-[13px] font-bold truncate"
-            style={{ color: FgColor, letterSpacing: "-0.01em" }}
-          >
-            {song?.title ?? "Select a song"}
-          </p>
-          <p
-            className="text-[11px] truncate mt-0.5"
-            style={{ color: SubtleColor }}
-          >
-            {song?.artist ?? "—"}
-          </p>
-        </div>
-        <button
-          type="button"
-          data-ocid="player.like.button"
-          onClick={onToggleLike}
-          className="flex-shrink-0 p-1.5 cursor-pointer"
-          style={{
-            color: isLiked ? Accent : MutedColor,
-            background: "none",
-            border: "none",
-            transition: "color 0.2s ease, transform 0.15s ease",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.transform =
-              "scale(1.15)";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
-          }}
-          aria-label={isLiked ? "Unlike song" : "Like song"}
-        >
-          <svg
-            aria-hidden="true"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill={isLiked ? "currentColor" : "none"}
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          data-ocid="player.open_modal_button"
-          onClick={onExpandPlayer}
-          aria-label="Open full screen player"
-          className="hidden sm:flex flex-shrink-0 p-1.5 cursor-pointer items-center justify-center"
-          style={{
-            color: MutedColor,
-            background: "none",
-            border: "none",
-            transition: "color 0.2s ease",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color = SubtleColor;
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color = MutedColor;
-          }}
-        >
-          <ChevronUp size={15} aria-hidden="true" />
-        </button>
+        />
       </div>
 
-      {/* Center: controls + progress */}
-      <div className="flex flex-col items-center gap-2 flex-1 max-w-[500px]">
-        {/* Control buttons */}
-        <div className="flex items-center gap-5">
+      <div className="player-inner">
+        {/* ── LEFT: song info ── */}
+        <div className="player-left">
+          <button
+            type="button"
+            data-ocid="player.expand.button"
+            onClick={onExpandPlayer}
+            className="flex-shrink-0 rounded-lg overflow-hidden"
+            style={{
+              width: 42,
+              height: 42,
+              background: albumBg,
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 20,
+            }}
+            aria-label="Expand player"
+          >
+            {song?.emoji ?? "🎵"}
+          </button>
+
+          <div className="player-track-info" style={{ minWidth: 0 }}>
+            <div className="player-track-title">
+              {song?.title ?? "No track selected"}
+            </div>
+            <div className="player-track-artist">{song?.artist ?? "—"}</div>
+          </div>
+
+          <button
+            type="button"
+            data-ocid="player.like.toggle"
+            onClick={onToggleLike}
+            className="player-ctrl-btn"
+            aria-label={isLiked ? "Unlike" : "Like"}
+            style={{
+              color: isLiked ? Accent : MutedColor,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 18,
+            }}
+          >
+            {isLiked ? "♥" : "♡"}
+          </button>
+        </div>
+
+        {/* ── CENTER: controls ── */}
+        <div className="player-center">
           <button
             type="button"
             data-ocid="player.shuffle.toggle"
             onClick={onToggleShuffle}
-            className="p-1 cursor-pointer flex-shrink-0"
+            className="player-ctrl-btn"
+            aria-label={isShuffled ? "Disable shuffle" : "Enable shuffle"}
             style={{
-              color: isShuffled ? Accent : MutedColor,
+              color: isShuffled ? Accent : SubtleColor,
               background: "none",
               border: "none",
-              transition: "color 0.2s ease",
+              cursor: "pointer",
+              padding: 8,
             }}
-            aria-label={isShuffled ? "Disable shuffle" : "Enable shuffle"}
-            aria-pressed={isShuffled}
           >
-            <Shuffle
-              size={16}
-              strokeWidth={isShuffled ? 2.5 : 2}
-              aria-hidden="true"
-            />
+            <Shuffle size={16} aria-hidden="true" />
           </button>
+
           <button
             type="button"
             data-ocid="player.prev.button"
             onClick={onPrev}
-            className="p-1 cursor-pointer flex-shrink-0"
+            className="player-ctrl-btn"
+            aria-label="Previous track"
             style={{
-              color: SubtleColor,
+              color: FgColor,
               background: "none",
               border: "none",
-              transition: "color 0.15s ease",
+              cursor: "pointer",
+              padding: 8,
             }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.color = FgColor;
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.color = SubtleColor;
-            }}
-            aria-label="Previous track"
           >
-            <SkipBack
-              size={22}
-              fill="currentColor"
-              stroke="none"
-              aria-hidden="true"
-            />
+            <SkipBack size={18} aria-hidden="true" />
           </button>
-          {/* Main play/pause button */}
+
           <button
             type="button"
             data-ocid="player.play.button"
             onClick={onTogglePlay}
-            className={`play-btn-glow w-[52px] h-[52px] rounded-full flex items-center justify-center cursor-pointer flex-shrink-0${isPlaying ? " playing" : ""}`}
+            className="player-play-btn"
+            aria-label={isPlaying ? "Pause" : "Play"}
             style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
               background: Accent,
               border: "none",
-              boxShadow: isPlaying
-                ? `0 0 24px ${AccentGlow}, 0 4px 16px rgba(0,0,0,0.4)`
-                : "0 4px 16px rgba(0,0,0,0.4)",
-              transition: "box-shadow 0.2s ease, transform 0.15s ease",
+              color: "#000",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: isPlaying ? `0 0 20px ${AccentGlow}` : "none",
+              flexShrink: 0,
             }}
-            aria-label={isPlaying ? "Pause" : "Play"}
           >
             {isPlaying ? (
-              <Pause size={20} fill="#000" stroke="none" aria-hidden="true" />
+              <Pause size={18} fill="#000" stroke="none" aria-hidden="true" />
             ) : (
-              <Play
-                size={20}
-                fill="#000"
-                stroke="none"
-                className="ml-0.5"
-                aria-hidden="true"
-              />
+              <Play size={18} fill="#000" stroke="none" aria-hidden="true" />
             )}
           </button>
+
           <button
             type="button"
             data-ocid="player.next.button"
             onClick={onNext}
-            className="p-1 cursor-pointer flex-shrink-0"
+            className="player-ctrl-btn"
+            aria-label="Next track"
             style={{
-              color: SubtleColor,
+              color: FgColor,
               background: "none",
               border: "none",
-              transition: "color 0.15s ease",
+              cursor: "pointer",
+              padding: 8,
             }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.color = FgColor;
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.color = SubtleColor;
-            }}
-            aria-label="Next track"
           >
-            <SkipForward
-              size={22}
-              fill="currentColor"
-              stroke="none"
-              aria-hidden="true"
-            />
+            <SkipForward size={18} aria-hidden="true" />
           </button>
+
           <button
             type="button"
             data-ocid="player.repeat.toggle"
             onClick={onToggleRepeat}
-            className="p-1 cursor-pointer flex-shrink-0"
+            className="player-ctrl-btn"
+            aria-label={`Repeat: ${repeatMode}`}
             style={{
-              color: repeatMode !== "none" ? Accent : MutedColor,
+              color: repeatMode !== "none" ? Accent : SubtleColor,
               background: "none",
               border: "none",
-              transition: "color 0.2s ease",
+              cursor: "pointer",
+              padding: 8,
             }}
-            aria-label={`Repeat: ${repeatMode}`}
-            aria-pressed={repeatMode !== "none"}
           >
             {repeatMode === "one" ? (
-              <Repeat1 size={16} strokeWidth={2.5} aria-hidden="true" />
+              <Repeat1 size={16} aria-hidden="true" />
             ) : (
-              <Repeat
+              <Repeat size={16} aria-hidden="true" />
+            )}
+          </button>
+
+          <div
+            className="player-time"
+            style={{ color: MutedColor, fontSize: 11, whiteSpace: "nowrap" }}
+          >
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </div>
+        </div>
+
+        {/* ── RIGHT: volume + extras ── */}
+        <div className="player-right">
+          {/* Waveform — always shown for local tracks */}
+          {audioUrl && song && (
+            <WaveformBar
+              audioUrl={audioUrl}
+              isPlaying={isPlaying}
+              progress={progress}
+            />
+          )}
+
+          {/* Volume */}
+          <div className="flex items-center gap-2">
+            {volume === 0 ? (
+              <VolumeX
                 size={16}
-                strokeWidth={repeatMode === "all" ? 2.5 : 2}
+                style={{ color: MutedColor }}
+                aria-hidden="true"
+              />
+            ) : (
+              <Volume2
+                size={16}
+                style={{ color: SubtleColor }}
                 aria-hidden="true"
               />
             )}
-          </button>
-        </div>
-
-        {/* Progress row */}
-        <div className="flex items-center gap-2.5 w-full">
-          <span
-            className="text-[10px] w-8 text-right flex-shrink-0 font-medium"
-            style={{ color: MutedColor }}
-          >
-            {formatTime(currentTime)}
-          </span>
-          <div
-            ref={progressRef}
-            data-ocid="player.progress.input"
-            role="slider"
-            aria-label="Playback progress"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(progress * 100)}
-            tabIndex={0}
-            onClick={handleProgressClick}
-            onKeyDown={handleProgressKey}
-            className="progress-bar-container progress-bar-track flex-1 cursor-pointer group"
-          >
             <div
-              className="progress-bar-fill"
-              style={{ width: `${progress * 100}%` }}
+              ref={volumeRef}
+              role="slider"
+              tabIndex={0}
+              aria-label="Volume"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(volume * 100)}
+              data-ocid="player.volume.input"
+              onClick={handleVolumeClick}
+              onKeyDown={handleVolumeKey}
+              style={{
+                width: 80,
+                height: 4,
+                borderRadius: 2,
+                background: "rgba(255,255,255,0.15)",
+                cursor: "pointer",
+                position: "relative",
+              }}
             >
-              <div className="progress-bar-knob" />
+              <div
+                style={{
+                  height: "100%",
+                  borderRadius: 2,
+                  width: `${volume * 100}%`,
+                  background: Accent,
+                }}
+              />
             </div>
           </div>
-          <span
-            className="text-[10px] w-8 flex-shrink-0 font-medium"
-            style={{ color: MutedColor }}
-          >
-            {formatTime(displayDuration)}
-          </span>
-        </div>
-      </div>
 
-      {/* Right: atmos + queue + volume */}
-      <div
-        className="flex items-center gap-3 flex-shrink-0"
-        style={{ width: 260, justifyContent: "flex-end" }}
-      >
-        {/* Atmos Toggle */}
-        <AtmosToggle mode={atmosMode} onToggle={onToggleAtmos} />
+          <AtmosToggle mode={atmosMode} onToggle={onToggleAtmos} />
 
-        <button
-          type="button"
-          data-ocid="player.queue.toggle"
-          onClick={onToggleQueue}
-          className="p-1.5 cursor-pointer flex-shrink-0"
-          style={{
-            color: isQueueOpen ? Accent : MutedColor,
-            background: "none",
-            border: "none",
-            transition: "color 0.2s ease",
-          }}
-          aria-label="Toggle queue"
-          aria-pressed={isQueueOpen}
-        >
-          <ListMusic size={17} aria-hidden="true" />
-        </button>
-        <div className="flex items-center gap-1.5">
           <button
             type="button"
-            data-ocid="player.volume.button"
-            onClick={() => onVolumeChange(volume > 0 ? 0 : 0.7)}
-            className="p-1.5 cursor-pointer flex-shrink-0"
+            data-ocid="player.queue.toggle"
+            onClick={onToggleQueue}
             style={{
-              color: MutedColor,
               background: "none",
               border: "none",
-              transition: "color 0.15s ease",
+              color: isQueueOpen ? Accent : SubtleColor,
+              cursor: "pointer",
+              padding: 6,
             }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.color = SubtleColor;
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.color = MutedColor;
-            }}
-            aria-label={volume === 0 ? "Unmute" : "Mute"}
+            aria-label="Toggle queue"
           >
-            {volume === 0 ? (
-              <VolumeX size={16} aria-hidden="true" />
-            ) : (
-              <Volume2 size={16} aria-hidden="true" />
-            )}
+            <ListMusic size={18} aria-hidden="true" />
           </button>
-          <div
-            ref={volumeRef}
-            data-ocid="player.volume.input"
-            role="slider"
-            aria-label="Volume"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(volume * 100)}
-            tabIndex={0}
-            onClick={handleVolumeClick}
-            onKeyDown={handleVolumeKey}
-            className="volume-bar-container progress-bar-track cursor-pointer"
-            style={{ width: 80 }}
+
+          <button
+            type="button"
+            data-ocid="player.expand.button"
+            onClick={onExpandPlayer}
+            style={{
+              background: "none",
+              border: "none",
+              color: SubtleColor,
+              cursor: "pointer",
+              padding: 6,
+            }}
+            aria-label="Expand player"
           >
-            <div
-              className="progress-bar-fill"
-              style={{ width: `${volume * 100}%` }}
-            >
-              <div className="progress-bar-knob" />
-            </div>
-          </div>
+            <ChevronUp size={18} aria-hidden="true" />
+          </button>
         </div>
       </div>
     </div>

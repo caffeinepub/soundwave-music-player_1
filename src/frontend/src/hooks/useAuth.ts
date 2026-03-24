@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { FIREBASE_CONFIG, FIREBASE_ENABLED } from "../firebaseConfig";
 
 export interface AuthUser {
   uid: string;
@@ -10,95 +11,158 @@ export interface AuthUser {
 
 const LS_KEY = "sw_auth_user";
 
-const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY as
-  | string
-  | undefined;
-const FIREBASE_AUTH_DOMAIN = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as
-  | string
-  | undefined;
-const FIREBASE_PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID as
-  | string
-  | undefined;
+// ── Module-level singleton ──────────────────────────────────────────────────
+// All useAuth() instances share this single source of truth.
+// When it changes, every subscribed component re-renders.
 
-const isFirebaseConfigured =
-  !!FIREBASE_API_KEY && !!FIREBASE_AUTH_DOMAIN && !!FIREBASE_PROJECT_ID;
-
-const FIREBASE_CONFIG = {
-  apiKey: FIREBASE_API_KEY,
-  authDomain: FIREBASE_AUTH_DOMAIN,
-  projectId: FIREBASE_PROJECT_ID,
-};
-
-let cachedApp: unknown = null;
-
-async function getFirebaseAuth(): Promise<unknown> {
-  if (!isFirebaseConfigured) return null;
-  // Dynamic imports — Firebase may not be installed; this is caught at runtime
-  // biome-ignore lint/suspicious/noExplicitAny: dynamic firebase import
-  const app = await new Function("m", "return import(m)")("firebase/app");
-  if (!cachedApp) {
-    cachedApp =
-      app.getApps().length > 0
-        ? app.getApps()[0]
-        : app.initializeApp(FIREBASE_CONFIG);
+let _user: AuthUser | null = (() => {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    return null;
   }
-  // biome-ignore lint/suspicious/noExplicitAny: dynamic firebase import
-  const authMod = await new Function("m", "return import(m)")("firebase/auth");
-  return authMod.getAuth(cachedApp);
+})();
+
+let _loading = FIREBASE_ENABLED; // true only while Firebase resolves the initial session
+let _authInitialized = false;
+
+type Listener = (user: AuthUser | null, loading: boolean) => void;
+const _listeners = new Set<Listener>();
+
+function _notify() {
+  for (const l of _listeners) l(_user, _loading);
 }
 
-export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      return raw ? (JSON.parse(raw) as AuthUser) : null;
-    } catch {
-      return null;
+function _setUser(user: AuthUser | null) {
+  _user = user;
+  if (user) {
+    localStorage.setItem(LS_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(LS_KEY);
+  }
+  _notify();
+}
+
+function _setLoading(v: boolean) {
+  _loading = v;
+  _notify();
+}
+
+// ── Firebase lazy loader (runs once) ────────────────────────────────────────
+// Uses new Function() to bypass TypeScript module resolution for optional deps.
+
+let _cachedApp: unknown = null;
+let _cachedAuth: unknown = null;
+
+async function fbImport(mod: string): Promise<any> {
+  return new Function("m", "return import(m)")(mod);
+}
+
+async function getFirebaseAuth(): Promise<unknown | null> {
+  if (!FIREBASE_ENABLED) return null;
+  try {
+    const app = await fbImport("firebase/app");
+    if (!_cachedApp) {
+      _cachedApp =
+        app.getApps().length > 0
+          ? app.getApps()[0]
+          : app.initializeApp(FIREBASE_CONFIG);
     }
-  });
-  const [loading, setLoading] = useState(isFirebaseConfigured);
+    const authMod = await fbImport("firebase/auth");
+    if (!_cachedAuth) {
+      _cachedAuth = authMod.getAuth(_cachedApp);
+    }
+    return _cachedAuth;
+  } catch (err) {
+    console.error("[useAuth] Firebase load error:", err);
+    return null;
+  }
+}
+
+// ── Start onAuthStateChanged listener exactly once ──────────────────────────
+
+async function _initFirebaseAuth() {
+  if (_authInitialized || !FIREBASE_ENABLED) {
+    if (!FIREBASE_ENABLED) _setLoading(false);
+    return;
+  }
+  _authInitialized = true;
+
+  try {
+    const auth = await getFirebaseAuth();
+    if (!auth) {
+      _setLoading(false);
+      return;
+    }
+    const authMod = await fbImport("firebase/auth");
+
+    // Handle redirect result first (for mobile browsers where popup is blocked)
+    try {
+      const result = await authMod.getRedirectResult(auth);
+      if (result?.user) {
+        const fbUser = result.user;
+        _setUser({
+          uid: fbUser.uid,
+          name: fbUser.displayName ?? fbUser.email?.split("@")[0] ?? "User",
+          email: fbUser.email ?? "",
+          photoURL: fbUser.photoURL ?? undefined,
+          provider: "google",
+        });
+      }
+    } catch {
+      // redirect result errors are non-fatal
+    }
+
+    authMod.onAuthStateChanged(auth, (fbUser: any) => {
+      if (fbUser) {
+        _setUser({
+          uid: fbUser.uid,
+          name: fbUser.displayName ?? fbUser.email?.split("@")[0] ?? "User",
+          email: fbUser.email ?? "",
+          photoURL: fbUser.photoURL ?? undefined,
+          provider:
+            fbUser.providerData[0]?.providerId === "google.com"
+              ? "google"
+              : "email",
+        });
+      } else {
+        _setUser(null);
+      }
+      _setLoading(false);
+    });
+  } catch (err) {
+    console.error("[useAuth] Firebase init error:", err);
+    _setLoading(false);
+  }
+}
+
+// Kick off Firebase auth initialization immediately when module loads
+_initFirebaseAuth();
+
+// ── Hook ────────────────────────────────────────────────────────────────────
+
+export function useAuth() {
+  const [state, setState] = useState<{
+    user: AuthUser | null;
+    loading: boolean;
+  }>(() => ({ user: _user, loading: _loading }));
 
   useEffect(() => {
-    if (!isFirebaseConfigured) return;
-    let unsub: (() => void) | undefined;
-    (async () => {
-      try {
-        const auth = await getFirebaseAuth();
-        if (!auth) return;
-        // biome-ignore lint/suspicious/noExplicitAny: dynamic firebase import
-        const authMod = await new Function("m", "return import(m)")(
-          "firebase/auth",
-        );
-        unsub = authMod.onAuthStateChanged(auth, (fbUser: any) => {
-          if (fbUser) {
-            const u: AuthUser = {
-              uid: fbUser.uid,
-              name: fbUser.displayName ?? fbUser.email?.split("@")[0] ?? "User",
-              email: fbUser.email ?? "",
-              photoURL: fbUser.photoURL ?? undefined,
-              provider:
-                fbUser.providerData[0]?.providerId === "google.com"
-                  ? "google"
-                  : "email",
-            };
-            setUser(u);
-            localStorage.setItem(LS_KEY, JSON.stringify(u));
-          } else {
-            setUser(null);
-            localStorage.removeItem(LS_KEY);
-          }
-          setLoading(false);
-        });
-      } catch {
-        setLoading(false);
-      }
-    })();
-    return () => unsub?.();
+    // Subscribe to singleton updates
+    const listener: Listener = (user, loading) => {
+      setState({ user, loading });
+    };
+    _listeners.add(listener);
+    // Sync immediately in case state changed between render and effect
+    setState({ user: _user, loading: _loading });
+    return () => {
+      _listeners.delete(listener);
+    };
   }, []);
 
   const signInWithGoogle = useCallback(async (): Promise<AuthUser> => {
-    if (!isFirebaseConfigured) {
-      // Demo mode
+    if (!FIREBASE_ENABLED) {
       const u: AuthUser = {
         uid: `demo-google-${Date.now()}`,
         name: "Demo User",
@@ -106,29 +170,43 @@ export function useAuth() {
         photoURL: undefined,
         provider: "demo",
       };
-      setUser(u);
-      localStorage.setItem(LS_KEY, JSON.stringify(u));
+      _setUser(u);
       return u;
     }
+
     const auth = await getFirebaseAuth();
     if (!auth) throw new Error("Firebase not available");
-    // biome-ignore lint/suspicious/noExplicitAny: dynamic firebase import
-    const authMod = await new Function("m", "return import(m)")(
-      "firebase/auth",
-    );
+    const authMod = await fbImport("firebase/auth");
     const provider = new authMod.GoogleAuthProvider();
-    const cred = await authMod.signInWithPopup(auth, provider);
-    const fbUser = cred.user;
-    const u: AuthUser = {
-      uid: fbUser.uid,
-      name: fbUser.displayName ?? "User",
-      email: fbUser.email ?? "",
-      photoURL: fbUser.photoURL ?? undefined,
-      provider: "google",
-    };
-    setUser(u);
-    localStorage.setItem(LS_KEY, JSON.stringify(u));
-    return u;
+    provider.addScope("profile");
+    provider.addScope("email");
+
+    try {
+      const cred = await authMod.signInWithPopup(auth, provider);
+      const fbUser = cred.user;
+      const u: AuthUser = {
+        uid: fbUser.uid,
+        name: fbUser.displayName ?? "User",
+        email: fbUser.email ?? "",
+        photoURL: fbUser.photoURL ?? undefined,
+        provider: "google",
+      };
+      _setUser(u);
+      return u;
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      // Popup blocked — fall back to redirect (mobile browsers)
+      if (
+        code === "auth/popup-blocked" ||
+        code === "auth/popup-closed-by-user" ||
+        code === "auth/cancelled-popup-request"
+      ) {
+        await authMod.signInWithRedirect(auth, provider);
+        // Page will reload — result handled by getRedirectResult above
+        throw new Error("Redirecting to Google sign-in\u2026");
+      }
+      throw err;
+    }
   }, []);
 
   const signInWithEmail = useCallback(
@@ -144,25 +222,20 @@ export function useAuth() {
         throw new Error("Password must be at least 6 characters");
       }
 
-      if (!isFirebaseConfigured) {
-        // Demo mode
+      if (!FIREBASE_ENABLED) {
         const u: AuthUser = {
           uid: `demo-email-${Date.now()}`,
           name: email.split("@")[0],
           email,
           provider: "demo",
         };
-        setUser(u);
-        localStorage.setItem(LS_KEY, JSON.stringify(u));
+        _setUser(u);
         return u;
       }
 
       const auth = await getFirebaseAuth();
       if (!auth) throw new Error("Firebase not available");
-      // biome-ignore lint/suspicious/noExplicitAny: dynamic firebase import
-      const authMod = await new Function("m", "return import(m)")(
-        "firebase/auth",
-      );
+      const authMod = await fbImport("firebase/auth");
 
       let fbUser: any;
       if (isSignUp) {
@@ -207,31 +280,32 @@ export function useAuth() {
         email: fbUser.email ?? email,
         provider: "email",
       };
-      setUser(u);
-      localStorage.setItem(LS_KEY, JSON.stringify(u));
+      _setUser(u);
       return u;
     },
     [],
   );
 
   const signOut = useCallback(async () => {
-    if (isFirebaseConfigured) {
+    if (FIREBASE_ENABLED) {
       try {
         const auth = await getFirebaseAuth();
         if (auth) {
-          // biome-ignore lint/suspicious/noExplicitAny: dynamic firebase import
-          const authMod = await new Function("m", "return import(m)")(
-            "firebase/auth",
-          );
+          const authMod = await fbImport("firebase/auth");
           await authMod.signOut(auth);
         }
       } catch {
         // ignore
       }
     }
-    setUser(null);
-    localStorage.removeItem(LS_KEY);
+    _setUser(null);
   }, []);
 
-  return { user, loading, signInWithGoogle, signInWithEmail, signOut };
+  return {
+    user: state.user,
+    loading: state.loading,
+    signInWithGoogle,
+    signInWithEmail,
+    signOut,
+  };
 }

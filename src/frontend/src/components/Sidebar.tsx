@@ -9,6 +9,7 @@ interface SidebarProps {
   onNavChange: (nav: string) => void;
   user?: AuthUser | null;
   isPremium?: boolean;
+  daysLeft?: number;
   onSignIn?: () => void;
   onSignOut?: () => void;
   onUpgrade?: () => void;
@@ -30,6 +31,7 @@ export default function Sidebar({
   onNavChange,
   user,
   isPremium,
+  daysLeft,
   onSignIn,
   onSignOut,
   onUpgrade,
@@ -266,6 +268,21 @@ export default function Sidebar({
               >
                 ✨ Upgrade to Premium
               </button>
+            )}
+            {isPremium && typeof daysLeft === "number" && daysLeft <= 7 && (
+              <div
+                style={{
+                  background: "rgba(245,158,11,0.15)",
+                  border: "1px solid rgba(245,158,11,0.3)",
+                  borderRadius: 8,
+                  padding: "6px 10px",
+                  fontSize: 11,
+                  color: "#F59E0B",
+                  marginTop: 8,
+                }}
+              >
+                ⚠️ Premium expires in {daysLeft}d
+              </div>
             )}
           </>
         ) : (

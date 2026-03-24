@@ -17,6 +17,7 @@ import {
 import { type Song, colorGradients, formatTime } from "../data/songs";
 import type { AuthUser } from "../hooks/useAuth";
 import AIRecommendations from "./AIRecommendations";
+import CinematicHero from "./CinematicHero";
 
 import {
   FallbackError,
@@ -35,9 +36,9 @@ interface MainContentProps {
   recentIds: number[];
   searchQuery: string;
   onSongPlay: (idx: number) => void;
-  onPlayYouTubeSong: (song: Song) => void;
-  onPlayYT: (videoId: string, title: string) => void;
   onToggleLike: (songId: string) => void;
+  onMoreInfo?: () => void;
+  onShowToast?: (msg: string) => void;
   onViewChange: (view: string) => void;
   onSearchChange: (q: string) => void;
   user?: AuthUser | null;
@@ -165,92 +166,6 @@ const HOLLYWOOD_ARTISTS = [
   ...a,
   image: `https://img.youtube.com/vi/${a.topVideoId}/hqdefault.jpg`,
 }));
-
-// ── Hero Banner ──────────────────────────────────────────────────────────────
-function HeroBanner({ onPlay }: { onPlay: () => void }) {
-  const [imgSrc, setImgSrc] = useState(
-    "https://img.youtube.com/vi/4NRXx6U8ABQ/hqdefault.jpg",
-  );
-
-  return (
-    <div
-      className="hero-banner relative w-full overflow-hidden rounded-2xl"
-      style={{ height: "clamp(220px, 38vw, 420px)" }}
-    >
-      <img
-        src={imgSrc}
-        alt="The Weeknd - Blinding Lights"
-        loading="lazy"
-        onError={() => {
-          console.warn("[HeroBanner] maxresdefault failed, trying hqdefault");
-          if (imgSrc.includes("maxresdefault")) {
-            setImgSrc("https://img.youtube.com/vi/4NRXx6U8ABQ/hqdefault.jpg");
-          }
-        }}
-        className="hero-banner-img absolute inset-0 w-full h-full object-cover"
-        style={{ transformOrigin: "center center" }}
-      />
-      {/* Gradient overlay */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "linear-gradient(to right, rgba(0,0,0,0.85) 0%, rgba(10,0,20,0.5) 50%, transparent 100%), linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%)",
-        }}
-      />
-      {/* Vignette */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)",
-        }}
-      />
-      {/* Content */}
-      <div className="absolute inset-0 flex flex-col justify-end p-8">
-        <div
-          className="text-[11px] font-bold uppercase tracking-[0.2em] mb-2"
-          style={{ color: Accent }}
-        >
-          🎵 Featured Artist
-        </div>
-        <h1
-          className="font-black text-white mb-1"
-          style={{
-            fontSize: "clamp(1.6rem, 4vw, 3rem)",
-            letterSpacing: "-0.02em",
-            lineHeight: 1.1,
-            textShadow: "0 2px 20px rgba(0,0,0,0.8)",
-          }}
-        >
-          Soundwave
-        </h1>
-        <p
-          className="mb-5 font-medium"
-          style={{
-            color: SubtleColor,
-            fontSize: "clamp(0.85rem, 1.5vw, 1rem)",
-          }}
-        >
-          Premium Music Experience
-        </p>
-        <button
-          type="button"
-          data-ocid="hero.play.button"
-          onClick={onPlay}
-          className="flex items-center gap-2.5 rounded-full px-6 py-2.5 font-bold text-black text-[14px] w-fit transition-transform hover:scale-105 active:scale-95"
-          style={{
-            background: Accent,
-            boxShadow: "0 0 28px rgba(29,185,84,0.4)",
-          }}
-        >
-          <Play size={16} fill="#000" stroke="none" aria-hidden="true" />
-          Play Now
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ── Static artist image map (Wikipedia / reliable sources) ──────────────────
 const artistImages: Record<string, string> = {
@@ -1337,9 +1252,9 @@ export default function MainContent({
   recentIds,
   searchQuery,
   onSongPlay,
-  onPlayYouTubeSong,
-  onPlayYT,
   onToggleLike,
+  onMoreInfo,
+  onShowToast,
   onViewChange,
   onSearchChange,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1355,6 +1270,23 @@ export default function MainContent({
   const recentSongs = recentIds
     .map((idx) => songs[idx])
     .filter(Boolean) as Song[];
+
+  // Scroll fade-in for sections
+  useEffect(() => {
+    const sections = document.querySelectorAll(".fade-in-section");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("visible");
+          }
+        }
+      },
+      { threshold: 0.1 },
+    );
+    for (const s of sections) observer.observe(s);
+    return () => observer.disconnect();
+  }, []);
 
   const renderCards = (list: Song[]) => (
     <div className="flex flex-col gap-1">
@@ -1376,24 +1308,23 @@ export default function MainContent({
     </div>
   );
 
-  const handleSuggestionClick = (song: Song) => {
-    onPlayYouTubeSong(song);
+  // YouTube playback disabled — using local tracks only
+  const handleSuggestionClick = (_song: Song) => {
+    onShowToast?.("YouTube playback disabled — using local tracks");
     onViewChange("search");
   };
 
-  const handleYTResultPlay = (item: YouTubeItem) => {
-    onPlayYT(item.id.videoId, item.snippet.title);
+  const handleYTResultPlay = (_item: YouTubeItem) => {
+    onShowToast?.("YouTube playback disabled — using local tracks");
   };
 
-  const handleFeaturedPlayAll = (artistSongs: ArtistSong[]) => {
-    if (artistSongs.length > 0) {
-      const first = artistSongs[0];
-      onPlayYT(first.videoId, first.title);
-    }
+  const handleFeaturedPlayAll = (_artistSongs: ArtistSong[]) => {
+    // Play a local track instead
+    onSongPlay(0);
   };
 
-  const handleFeaturedPlaySong = (s: ArtistSong) => {
-    onPlayYT(s.videoId, s.title);
+  const handleFeaturedPlaySong = (_s: ArtistSong) => {
+    onSongPlay(0);
   };
 
   const bgGradient =
@@ -1469,15 +1400,115 @@ export default function MainContent({
         {/* ── HOME ── */}
         {activeView === "home" && (
           <>
+            {/* Continue Listening */}
+            {recentIds.length > 0 && (
+              <section className="fade-in-section" style={{ marginBottom: 32 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 16,
+                  }}
+                >
+                  <h2 style={{ color: "#fff", fontSize: 18, fontWeight: 800 }}>
+                    Continue Listening
+                  </h2>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    overflowX: "auto",
+                    paddingBottom: 8,
+                    scrollbarWidth: "none",
+                  }}
+                >
+                  {recentIds.slice(0, 5).map((idx) => {
+                    const song = songs[idx];
+                    if (!song) return null;
+                    const isActive = currentSongId === song.id && isPlaying;
+                    return (
+                      <button
+                        key={song.id}
+                        type="button"
+                        onClick={() => onSongPlay(idx)}
+                        style={{
+                          minWidth: 140,
+                          maxWidth: 140,
+                          background: isActive
+                            ? "rgba(29,185,84,0.15)"
+                            : "rgba(255,255,255,0.05)",
+                          border: `1px solid ${isActive ? "#1DB954" : "rgba(255,255,255,0.08)"}`,
+                          borderRadius: 14,
+                          padding: 14,
+                          cursor: "pointer",
+                          flexShrink: 0,
+                          transition: "all 0.2s",
+                          textAlign: "left",
+                        }}
+                        onMouseEnter={(e) => {
+                          (
+                            e.currentTarget as HTMLButtonElement
+                          ).style.transform = "translateY(-4px)";
+                        }}
+                        onMouseLeave={(e) => {
+                          (
+                            e.currentTarget as HTMLButtonElement
+                          ).style.transform = "translateY(0)";
+                        }}
+                      >
+                        <div
+                          className={song.colorClass}
+                          style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 10,
+                            marginBottom: 10,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 22,
+                          }}
+                        >
+                          {song.emoji}
+                        </div>
+                        <div
+                          style={{
+                            color: "#fff",
+                            fontWeight: 700,
+                            fontSize: 12,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {song.title}
+                        </div>
+                        <div
+                          style={{
+                            color: "#b3b3b3",
+                            fontSize: 11,
+                            marginTop: 2,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {song.artist}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
             {/* Hero banner */}
             <div className="mb-8">
-              <HeroBanner
-                onPlay={() => {
-                  const weeknd = FEATURED_ARTIST_PLAYLISTS.find(
-                    (a) => a.id === "the-weeknd",
-                  );
-                  if (weeknd) handleFeaturedPlayAll(weeknd.topSongs);
-                }}
+              <CinematicHero
+                onPlay={() => onSongPlay(0)}
+                onMoreInfo={onMoreInfo}
               />
             </div>
 
@@ -1514,45 +1545,65 @@ export default function MainContent({
             </HorizontalRow>
 
             {/* Trending Now (local songs) */}
+            <div id="trending-now" />
             <HorizontalRow title="Trending Now">
               {songs.slice(0, 8).map((song, i) => (
-                <HorizSongCard
+                <motion.div
                   key={song.id}
-                  song={song}
-                  isActive={currentSongId === song.id}
-                  isPlaying={isPlaying}
-                  onPlay={() => onSongPlay(i)}
-                />
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.06, duration: 0.4 }}
+                >
+                  <HorizSongCard
+                    song={song}
+                    isActive={currentSongId === song.id}
+                    isPlaying={isPlaying}
+                    onPlay={() => onSongPlay(i)}
+                  />
+                </motion.div>
               ))}
             </HorizontalRow>
 
             {/* Top Bollywood Artists */}
             <HorizontalRow title="Top Bollywood Artists">
               {BOLLYWOOD_ARTISTS.map((a) => (
-                <ArtistCard
+                <motion.div
                   key={a.name}
-                  name={a.name}
-                  imageUrl={a.image}
-                  onPlay={() => {
-                    onSearchChange(a.searchQuery);
-                    onViewChange("search");
-                  }}
-                />
+                  style={{ transformPerspective: 800 }}
+                  whileHover={{ scale: 1.05, rotateY: 4, rotateX: -2 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ArtistCard
+                    name={a.name}
+                    imageUrl={a.image}
+                    onPlay={() => {
+                      onSearchChange(a.searchQuery);
+                      onViewChange("search");
+                    }}
+                  />
+                </motion.div>
               ))}
             </HorizontalRow>
 
             {/* Top Global Artists */}
             <HorizontalRow title="Top Global Artists">
               {HOLLYWOOD_ARTISTS.map((a) => (
-                <ArtistCard
+                <motion.div
                   key={a.name}
-                  name={a.name}
-                  imageUrl={a.image}
-                  onPlay={() => {
-                    onSearchChange(a.searchQuery);
-                    onViewChange("search");
-                  }}
-                />
+                  style={{ transformPerspective: 800 }}
+                  whileHover={{ scale: 1.05, rotateY: 4, rotateX: -2 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ArtistCard
+                    name={a.name}
+                    imageUrl={a.image}
+                    onPlay={() => {
+                      onSearchChange(a.searchQuery);
+                      onViewChange("search");
+                    }}
+                  />
+                </motion.div>
               ))}
             </HorizontalRow>
 
