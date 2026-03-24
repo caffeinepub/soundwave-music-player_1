@@ -1,47 +1,41 @@
-# Soundwave Music Player — Production Upgrade
+# Soundwave Music Player
 
 ## Current State
-- Full-stack app: Motoko backend (YouTube proxy), React/TS/Tailwind frontend
-- YouTube IFrame API used via hidden `#yt-player` div (0x0 off-screen); loadVideoById controls playback
-- PlayerBar shows emoji/color art — not YouTube thumbnails
-- FullScreenPlayer shows blurred bg from YT thumbnail but art center is still emoji
-- FullScreenPlayer does NOT show the actual YouTube iframe/video
-- Netflix-style horizontal scroll rows exist but hero banner is not fully cinematic
-- Search routes through Motoko backend proxy; caching in memory + localStorage
-- Artist playlists hardcoded with YouTube video IDs
-- Dolby Atmos toggle implemented (real Web Audio for local, simulated for YouTube)
-- ErrorBoundary and error states implemented
-- Autoplay is off (playerVars: { autoplay: 0 })
+Full-stack music streaming app with:
+- Real audio playback: HTML5 Audio (SoundHelix) + YouTube IFrame API dual-player
+- PlayerBar with progress, volume, shuffle, repeat, Dolby Atmos toggle
+- MainContent: home (hero, horizontal rows, artist cards), search (YouTube API dropdown + results), liked, recent views
+- Sidebar with playlist navigation
+- YouTube search via youtubeSearch.ts with memory/localStorage cache
+- recentIds + likedIds tracked in localStorage
+- No auth system, no payment system, no AI recommendations
 
 ## Requested Changes (Diff)
 
 ### Add
-- YouTube thumbnail display in PlayerBar art slot (mqdefault fallback to hqdefault)
-- YouTube video visible in FullScreenPlayer via `<iframe>` embed (autoplay=1, controls=0) shown when YT song is active
-- FullScreenPlayer: when YouTube video, show iframe in the art area + background blur from same thumbnail
-- FullScreenPlayer close button prominent, smooth slide-up animation
-- Robust image fallback for all artist cards: maxresdefault → hqdefault → mqdefault → default.jpg
-- Clean error state for search: "Search temporarily unavailable" + link to YouTube search
-- Loading skeleton for search results (already partially exists, verify)
-- Mobile: mini player tap opens FullScreenPlayer (already exists, verify)
+- `useAuth` hook: Firebase Auth with Google Sign-In + Email/Password, demo fallback when no config keys set. Persist session in localStorage.
+- `useRecommendations` hook: localStorage-based smart recommendations engine. Inputs: likedIds, recentIds, searchHistory. Maps songs to moods (chill, workout, focus, party, romantic). Returns ranked song suggestions + mood-matched playlists.
+- `SignInModal` component: Google / Email+Password / Apple (UI only) sign-in. Uses `useAuth`. Matches existing dark glassmorphism design system.
+- `PaymentModal` component: Razorpay Checkout frontend integration. Plans: Free/Premium. On success stores `sw_premium=true` in localStorage. Demo mode when no Razorpay key.
+- `AIRecommendations` component: "Recommended for You" section on home page. Shows personalized cards based on listening history. Mood filter pills. Ready for future AI API hookup.
+- Search history tracking: persist last 20 search queries in localStorage `sw_search_history`.
 
 ### Modify
-- PlayerBar art: replace emoji div with `<img>` showing YouTube thumbnail when song.youtubeId exists; fallback to emoji for local songs
-- FullScreenPlayer art area: when song.youtubeId, embed `<iframe>` instead of emoji/art card; use 16:9 aspect ratio
-- The #yt-player hidden div: set width/height to 1px minimum but use `visibility:hidden` approach so YouTube IFrame API initializes correctly
-- HeroBanner: ensure it always renders (the topVideoId fallback chain works); add smooth zoom animation
-- Netflix rows: ensure horizontal scroll snap works on mobile; add row labels clearly
-- Search error handling: catch FallbackError and show clean UI with YouTube redirect link
-- Artist cards: use two-level image fallback (maxresdefault → hqdefault with onerror handler)
+- `App.tsx`: Add `useAuth`, `isPremium` state, expose `showSignIn`/`showPayment` state triggers, pass `user`, `isPremium`, `onSignIn`, `onSignOut`, `onUpgrade` to Sidebar and MainContent.
+- `MainContent.tsx`: Accept `user` + `isPremium` + `likedIds` + `recentIds` + `onShowSignIn` + `onShowPayment`. Add `AIRecommendations` section in home view between hero and first row. Track search queries in localStorage `sw_search_history`.
+- `Sidebar.tsx`: Accept `user`, `isPremium`, `onSignIn`, `onSignOut`, `onUpgrade`. Show user avatar + name + plan badge at bottom. Show "Sign In" button when not logged in. Show "Upgrade" CTA for free users.
+- `index.html`: Add Razorpay checkout script.
 
 ### Remove
-- No features removed; only fixes and upgrades
+- Nothing removed — purely additive changes.
 
 ## Implementation Plan
-1. PlayerBar.tsx — add thumbnail img when youtubeId set, with onerror fallback to emoji
-2. FullScreenPlayer.tsx — when song.youtubeId, replace art area with embedded `<iframe src="https://www.youtube.com/embed/{id}?autoplay=1&controls=0&rel=0&modestbranding=1">` in a 16:9 container with cover fit; keep background blur behind it
-3. App.tsx — #yt-player: use visibility:hidden + position fixed offscreen to ensure YT API init works; when FullScreenPlayer is open and mode is youtube, pause the hidden player to avoid double audio (the iframe embed in FullScreenPlayer handles playback)
-4. Note on dual audio: when FullScreenPlayer shows embedded iframe with autoplay=1, the hidden YT player must be paused. When FullScreenPlayer closes, resume via hidden YT player. Track this in usePlayer via new `isFullScreenOpen` ref.
-5. MainContent.tsx — fix artist card image fallback chain; verify Netflix rows work
-6. youtubeSearch.ts — improve error UI messaging
-7. CSS — ensure full-screen player slide-up animation is smooth; add mobile tap target sizes
+1. Create `src/frontend/src/hooks/useAuth.ts` — Firebase auth with localStorage demo fallback
+2. Create `src/frontend/src/hooks/useRecommendations.ts` — pure localStorage recommendation engine
+3. Create `src/frontend/src/components/SignInModal.tsx` — auth modal
+4. Create `src/frontend/src/components/PaymentModal.tsx` — Razorpay modal
+5. Create `src/frontend/src/components/AIRecommendations.tsx` — recommendations section
+6. Update `src/frontend/src/App.tsx` — wire auth + payment state
+7. Update `src/frontend/src/components/MainContent.tsx` — add AIRecommendations, search history, user props
+8. Update `src/frontend/src/components/Sidebar.tsx` — add user profile, sign-in/upgrade CTAs
+9. Update `src/frontend/index.html` — add Razorpay script

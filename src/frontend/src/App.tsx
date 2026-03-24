@@ -2,14 +2,25 @@ import { useEffect, useState } from "react";
 import FullScreenPlayer from "./components/FullScreenPlayer";
 import IntroAnimation from "./components/IntroAnimation";
 import MainContent from "./components/MainContent";
+import PaymentModal, { type PlanInfo } from "./components/PaymentModal";
 import PlayerBar from "./components/PlayerBar";
 import QueuePanel from "./components/QueuePanel";
 import Sidebar from "./components/Sidebar";
+import SignInModal from "./components/SignInModal";
 import Toast from "./components/Toast";
 import { songs } from "./data/songs";
+import { type AuthUser, useAuth } from "./hooks/useAuth";
 import { usePlayer } from "./hooks/usePlayer";
 
 type ActiveView = "home" | "search" | "liked" | "recent";
+
+const PREMIUM_PLAN: PlanInfo = {
+  name: "Premium",
+  price: "\u20b9119",
+  amountPaise: 11900,
+  period: "per month",
+  color: "#1DB954",
+};
 
 export default function App() {
   const [introSeen, setIntroSeen] = useState(
@@ -19,7 +30,13 @@ export default function App() {
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isFullScreenPlayerOpen, setIsFullScreenPlayerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showSignIn, setShowSignIn] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
+  const [isPremium, setIsPremium] = useState(
+    () => localStorage.getItem("sw_premium") === "true",
+  );
 
+  const { user, signOut } = useAuth();
   const player = usePlayer();
 
   // Keyboard shortcuts
@@ -49,6 +66,10 @@ export default function App() {
     }
   };
 
+  const handleSignInSuccess = (_u: AuthUser) => {
+    setShowSignIn(false);
+  };
+
   return (
     <div className="app-shell">
       {!introSeen && <IntroAnimation onDone={() => setIntroSeen(true)} />}
@@ -67,7 +88,29 @@ export default function App() {
         }}
       />
 
-      <Sidebar activeNav={activeView} onNavChange={handleNavChange} />
+      <SignInModal
+        isOpen={showSignIn}
+        onClose={() => setShowSignIn(false)}
+        onSuccess={handleSignInSuccess}
+        onToast={(msg) => player.showToast(msg)}
+      />
+
+      <PaymentModal
+        isOpen={showPayment}
+        plan={PREMIUM_PLAN}
+        onClose={() => setShowPayment(false)}
+        onSuccess={() => setIsPremium(true)}
+      />
+
+      <Sidebar
+        activeNav={activeView}
+        onNavChange={handleNavChange}
+        user={user}
+        isPremium={isPremium}
+        onSignIn={() => setShowSignIn(true)}
+        onSignOut={signOut}
+        onUpgrade={() => setShowPayment(true)}
+      />
 
       <MainContent
         activeView={activeView}
@@ -97,6 +140,10 @@ export default function App() {
           setSearchQuery(q);
           if (activeView !== "search") setActiveView("search");
         }}
+        user={user}
+        isPremium={isPremium}
+        onShowSignIn={() => setShowSignIn(true)}
+        onShowPayment={() => setShowPayment(true)}
       />
 
       <PlayerBar

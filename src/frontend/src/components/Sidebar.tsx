@@ -1,11 +1,17 @@
-import { Clock, Heart, Home, Search } from "lucide-react";
+import { Clock, Heart, Home, LogOut, Search, Star } from "lucide-react";
 import { colorGradients, sidebarPlaylists } from "../data/songs";
+import type { AuthUser } from "../hooks/useAuth";
 
 type ViewId = "home" | "search" | "liked" | "recent";
 
 interface SidebarProps {
   activeNav: string;
   onNavChange: (nav: string) => void;
+  user?: AuthUser | null;
+  isPremium?: boolean;
+  onSignIn?: () => void;
+  onSignOut?: () => void;
+  onUpgrade?: () => void;
 }
 
 const navItems: {
@@ -19,7 +25,15 @@ const navItems: {
   { id: "recent", label: "Recently Played", Icon: Clock },
 ];
 
-export default function Sidebar({ activeNav, onNavChange }: SidebarProps) {
+export default function Sidebar({
+  activeNav,
+  onNavChange,
+  user,
+  isPremium,
+  onSignIn,
+  onSignOut,
+  onUpgrade,
+}: SidebarProps) {
   return (
     <aside
       className="sidebar-scroll flex flex-col"
@@ -139,11 +153,142 @@ export default function Sidebar({ activeNav, onNavChange }: SidebarProps) {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="px-6 py-4">
-        <p className="text-[11px]" style={{ color: "#4a4a4a" }}>
-          12 songs in library
-        </p>
+      {/* User section */}
+      <div
+        className="px-4 py-4"
+        style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}
+      >
+        {user ? (
+          <>
+            {/* User info */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 8,
+              }}
+            >
+              {/* Avatar */}
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  background: user.photoURL
+                    ? undefined
+                    : "linear-gradient(135deg, #1DB954, oklch(0.6 0.3 280))",
+                  backgroundImage: user.photoURL
+                    ? `url(${user.photoURL})`
+                    : undefined,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 14,
+                  fontWeight: 800,
+                  color: "#000",
+                  flexShrink: 0,
+                }}
+              >
+                {!user.photoURL && user.name[0].toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {user.name}
+                </div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: isPremium ? "#1DB954" : "#6a6a6a",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 3,
+                  }}
+                >
+                  {isPremium ? (
+                    <>
+                      <Star size={9} fill="#1DB954" stroke="none" /> Premium ✓
+                    </>
+                  ) : (
+                    "Free Plan"
+                  )}
+                </div>
+              </div>
+              <button
+                data-ocid="sidebar.signout.button"
+                type="button"
+                onClick={onSignOut}
+                title="Sign out"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#6a6a6a",
+                  cursor: "pointer",
+                  padding: 4,
+                  borderRadius: 6,
+                  flexShrink: 0,
+                }}
+              >
+                <LogOut size={15} />
+              </button>
+            </div>
+
+            {/* Upgrade button if not premium */}
+            {!isPremium && (
+              <button
+                data-ocid="sidebar.upgrade.button"
+                type="button"
+                onClick={onUpgrade}
+                style={{
+                  width: "100%",
+                  background: "linear-gradient(135deg, #F59E0B, #1DB954)",
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "9px",
+                  color: "#000",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  letterSpacing: "0.02em",
+                }}
+              >
+                ✨ Upgrade to Premium
+              </button>
+            )}
+          </>
+        ) : (
+          <button
+            data-ocid="sidebar.signin.button"
+            type="button"
+            onClick={onSignIn}
+            style={{
+              width: "100%",
+              background: "linear-gradient(135deg, #1DB954, #00B8FF)",
+              border: "none",
+              borderRadius: 10,
+              padding: "10px",
+              color: "#000",
+              fontSize: 13,
+              fontWeight: 800,
+              cursor: "pointer",
+              letterSpacing: "0.02em",
+            }}
+          >
+            Sign In
+          </button>
+        )}
       </div>
     </aside>
   );

@@ -15,6 +15,8 @@ import {
   FEATURED_ARTIST_PLAYLISTS,
 } from "../data/artistPlaylists";
 import { type Song, colorGradients, formatTime } from "../data/songs";
+import type { AuthUser } from "../hooks/useAuth";
+import AIRecommendations from "./AIRecommendations";
 
 import {
   FallbackError,
@@ -38,6 +40,10 @@ interface MainContentProps {
   onToggleLike: (songId: string) => void;
   onViewChange: (view: string) => void;
   onSearchChange: (q: string) => void;
+  user?: AuthUser | null;
+  isPremium?: boolean;
+  onShowSignIn?: () => void;
+  onShowPayment?: () => void;
 }
 
 const Accent = "#1DB954";
@@ -246,7 +252,55 @@ function HeroBanner({ onPlay }: { onPlay: () => void }) {
   );
 }
 
-// ── Artist image system ──────────────────────────────────────────────────────
+// ── Static artist image map (Wikipedia / reliable sources) ──────────────────
+const artistImages: Record<string, string> = {
+  "Arijit Singh":
+    "https://upload.wikimedia.org/wikipedia/commons/0/0f/Arijit_5th_GiMA_Awards.jpg",
+  "Shreya Ghoshal":
+    "https://upload.wikimedia.org/wikipedia/commons/9/9e/Shreya_Ghoshal_at_58th_Filmfare_Awards.jpg",
+  "Sonu Nigam":
+    "https://upload.wikimedia.org/wikipedia/commons/3/3f/Sonu_Nigam_2013.jpg",
+  "Armaan Malik":
+    "https://upload.wikimedia.org/wikipedia/commons/7/7b/Armaan_Malik.jpg",
+  "Neha Kakkar":
+    "https://upload.wikimedia.org/wikipedia/commons/8/8f/Neha_Kakkar.jpg",
+  KK: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/KK_Singer.jpg/440px-KK_Singer.jpg",
+  "Atif Aslam":
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Atif_Aslam.jpg/440px-Atif_Aslam.jpg",
+  "Jubin Nautiyal":
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Jubin_Nautiyal.jpg/440px-Jubin_Nautiyal.jpg",
+  "Mohit Chauhan":
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Mohit_Chauhan.jpg/440px-Mohit_Chauhan.jpg",
+  "Sunidhi Chauhan":
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Sunidhi_Chauhan_live.jpg/440px-Sunidhi_Chauhan_live.jpg",
+  "Taylor Swift":
+    "https://upload.wikimedia.org/wikipedia/commons/f/f2/Taylor_Swift_2019_by_Glenn_Francis.jpg",
+  "Ed Sheeran":
+    "https://upload.wikimedia.org/wikipedia/commons/4/45/Ed_Sheeran_2018.jpg",
+  "Justin Bieber":
+    "https://upload.wikimedia.org/wikipedia/commons/0/0e/Justin_Bieber_2015.jpg",
+  "The Weeknd":
+    "https://upload.wikimedia.org/wikipedia/commons/9/9c/The_Weeknd_2017.jpg",
+  "Ariana Grande":
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/Ariana_Grande_Grammys_2020.png/440px-Ariana_Grande_Grammys_2020.png",
+  Drake:
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Drake_2014.jpg/440px-Drake_2014.jpg",
+  "Billie Eilish":
+    "https://upload.wikimedia.org/wikipedia/commons/4/4f/Billie_Eilish_2019.jpg",
+  "Bruno Mars":
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Bruno_Mars_2010.jpg/440px-Bruno_Mars_2010.jpg",
+  "Dua Lipa":
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fb/Dua_Lipa_2018.png/440px-Dua_Lipa_2018.png",
+  Coldplay:
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Coldplay_2012.jpg/440px-Coldplay_2012.jpg",
+};
+
+function getArtistImage(name: string): string {
+  return (
+    artistImages[name] ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=121212&color=1DB954&size=300`
+  );
+}
 
 // ── Artist Card ──────────────────────────────────────────────────────────────
 function ArtistCard({
@@ -271,17 +325,16 @@ function ArtistCard({
       }}
     >
       <img
-        src={`https://source.unsplash.com/300x300/?${encodeURIComponent(name)},singer`}
+        src={getArtistImage(name)}
         alt={name}
-        className="artist-img"
         loading="lazy"
+        className="artist-card-img w-full h-full object-cover"
         onError={(e) => {
-          const t = e.currentTarget;
-          t.onerror = null;
-          t.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=111&color=00ff88&size=300`;
-          console.log("Artist Image fallback:", name);
+          const target = e.currentTarget;
+          target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=121212&color=1DB954&size=300`;
+          target.classList.add("loaded");
         }}
-        onLoad={() => console.log("Artist Image:", name)}
+        onLoad={(e) => e.currentTarget.classList.add("loaded")}
       />
       {/* Dark overlay + play */}
       <div
@@ -719,18 +772,16 @@ function FeaturedArtistCard({
         }}
       >
         <img
-          src={`https://source.unsplash.com/300x300/?${encodeURIComponent(playlist.name)},singer`}
+          src={getArtistImage(playlist.name)}
           alt={playlist.name}
-          className="artist-img w-full h-full object-cover"
           loading="lazy"
-          style={{ background: "#111", minHeight: "100px" }}
+          className="artist-card-img w-full h-full object-cover"
           onError={(e) => {
             const t = e.currentTarget;
-            t.onerror = null;
-            t.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist.name)}&background=111&color=00ff88&size=300`;
-            console.log("Artist Image fallback:", playlist.name);
+            t.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist.name)}&background=121212&color=1DB954&size=300`;
+            t.classList.add("loaded");
           }}
-          onLoad={() => console.log("Artist Image:", playlist.name)}
+          onLoad={(e) => e.currentTarget.classList.add("loaded")}
         />
         <div
           className="absolute inset-0"
@@ -1159,7 +1210,20 @@ function YouTubeSearchResults({
       return;
     }
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => runSearch(q), 300);
+    timerRef.current = setTimeout(() => {
+      // Save search to history
+      try {
+        const history = JSON.parse(
+          localStorage.getItem("sw_search_history") || "[]",
+        ) as string[];
+        const newHistory = [q, ...history.filter((h: string) => h !== q)].slice(
+          0,
+          20,
+        );
+        localStorage.setItem("sw_search_history", JSON.stringify(newHistory));
+      } catch {}
+      runSearch(q);
+    }, 300);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
@@ -1278,28 +1342,15 @@ export default function MainContent({
   onToggleLike,
   onViewChange,
   onSearchChange,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  user: _user,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  isPremium: _isPremium,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onShowSignIn: _onShowSignIn,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onShowPayment: _onShowPayment,
 }: MainContentProps) {
-  // Preload artist images on mount
-  useEffect(() => {
-    const allNames = [
-      ...BOLLYWOOD_ARTISTS.map((a) => a.name),
-      "Taylor Swift",
-      "Ed Sheeran",
-      "The Weeknd",
-      "Justin Bieber",
-      "Billie Eilish",
-      "Ariana Grande",
-      "Drake",
-      "Bruno Mars",
-      "Dua Lipa",
-      "Coldplay",
-    ];
-    for (const n of allNames) {
-      const img = new window.Image();
-      img.src = `https://source.unsplash.com/300x300/?${encodeURIComponent(n)},singer`;
-    }
-  }, []);
-
   const likedSongs = songs.filter((s) => likedIds.has(s.id));
   const recentSongs = recentIds
     .map((idx) => songs[idx])
@@ -1429,6 +1480,24 @@ export default function MainContent({
                 }}
               />
             </div>
+
+            {/* AI Recommendations */}
+            <AIRecommendations
+              likedIds={likedIds}
+              recentIds={recentIds}
+              searchHistory={(() => {
+                try {
+                  return JSON.parse(
+                    localStorage.getItem("sw_search_history") || "[]",
+                  ) as string[];
+                } catch {
+                  return [];
+                }
+              })()}
+              currentSongId={currentSongId}
+              isPlaying={isPlaying}
+              onPlay={onSongPlay}
+            />
 
             {/* Featured Artist Playlists */}
             <HorizontalRow title="Featured Artists">
