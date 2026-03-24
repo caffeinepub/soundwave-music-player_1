@@ -10,6 +10,9 @@ import QueuePanel from "./components/QueuePanel";
 import Sidebar from "./components/Sidebar";
 import SignInModal from "./components/SignInModal";
 import Toast from "./components/Toast";
+import YouTubePlayerEmbed, {
+  stopYTPlayer,
+} from "./components/YouTubePlayerEmbed";
 import { songs } from "./data/songs";
 import { type AuthUser, useAuth } from "./hooks/useAuth";
 import { usePlayer } from "./hooks/usePlayer";
@@ -40,6 +43,8 @@ export default function App() {
 
   const { user, loading: authLoading, signOut } = useAuth();
   const player = usePlayer();
+  const [ytVideoId, setYtVideoId] = useState<string | null>(null);
+  const [ytTitle, setYtTitle] = useState("");
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -70,6 +75,23 @@ export default function App() {
 
   const handleSignInSuccess = (_u: AuthUser) => {
     setShowSignIn(false);
+  };
+
+  const handleYTPlay = (videoId: string, title: string) => {
+    player.pauseAudio();
+    setYtVideoId(videoId);
+    setYtTitle(title);
+  };
+
+  const handleYTClose = () => {
+    setYtVideoId(null);
+    setYtTitle("");
+  };
+
+  const handleLocalPlay = (idx: number) => {
+    stopYTPlayer();
+    setYtVideoId(null);
+    player.playTrack(idx);
   };
 
   if (authLoading) {
@@ -290,7 +312,7 @@ export default function App() {
         likedIds={player.likedIds}
         recentIds={player.recentIds}
         searchQuery={searchQuery}
-        onSongPlay={player.playTrack}
+        onSongPlay={handleLocalPlay}
         onToggleLike={(songId) => {
           const idx = songs.findIndex((s) => s.id === songId);
           if (idx === player.currentIdx) {
@@ -314,33 +336,42 @@ export default function App() {
         isPremium={isPremium}
         onShowSignIn={() => setShowSignIn(true)}
         onShowPayment={() => setShowPayment(true)}
+        onYTPlay={handleYTPlay}
       />
 
-      <PlayerBar
-        song={player.currentSong}
-        isPlaying={player.isPlaying}
-        progress={player.progress}
-        currentTime={player.currentTime}
-        duration={player.duration}
-        volume={player.volume}
-        isShuffled={player.isShuffle}
-        repeatMode={player.repeatMode}
-        isLiked={player.isCurrentLiked}
-        isQueueOpen={isQueueOpen}
-        atmosMode={player.atmosMode}
-        onTogglePlay={player.togglePlay}
-        onPrev={player.prevTrack}
-        onNext={player.nextTrack}
-        onSeek={player.seek}
-        onVolumeChange={player.setVolume}
-        onToggleShuffle={player.toggleShuffle}
-        onToggleRepeat={player.toggleRepeat}
-        onToggleLike={player.toggleLike}
-        onToggleQueue={() => setIsQueueOpen((prev) => !prev)}
-        onToggleAtmos={player.toggleAtmos}
-        audioUrl={player.currentSong?.src ?? ""}
-        onExpandPlayer={() => setIsFullScreenPlayerOpen(true)}
+      <YouTubePlayerEmbed
+        videoId={ytVideoId}
+        title={ytTitle}
+        onClose={handleYTClose}
       />
+
+      {!ytVideoId && (
+        <PlayerBar
+          song={player.currentSong}
+          isPlaying={player.isPlaying}
+          progress={player.progress}
+          currentTime={player.currentTime}
+          duration={player.duration}
+          volume={player.volume}
+          isShuffled={player.isShuffle}
+          repeatMode={player.repeatMode}
+          isLiked={player.isCurrentLiked}
+          isQueueOpen={isQueueOpen}
+          atmosMode={player.atmosMode}
+          onTogglePlay={player.togglePlay}
+          onPrev={player.prevTrack}
+          onNext={player.nextTrack}
+          onSeek={player.seek}
+          onVolumeChange={player.setVolume}
+          onToggleShuffle={player.toggleShuffle}
+          onToggleRepeat={player.toggleRepeat}
+          onToggleLike={player.toggleLike}
+          onToggleQueue={() => setIsQueueOpen((prev) => !prev)}
+          onToggleAtmos={player.toggleAtmos}
+          audioUrl={player.currentSong?.src ?? ""}
+          onExpandPlayer={() => setIsFullScreenPlayerOpen(true)}
+        />
+      )}
 
       <FullScreenPlayer
         isOpen={isFullScreenPlayerOpen}
@@ -374,7 +405,7 @@ export default function App() {
         currentIdx={player.currentIdx}
         currentSong={player.currentSong}
         onClose={() => setIsQueueOpen(false)}
-        onPlayTrack={player.playTrack}
+        onPlayTrack={handleLocalPlay}
       />
 
       <Toast message={player.toastMsg} visible={player.toastMsg !== ""} />

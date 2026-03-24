@@ -45,10 +45,11 @@ interface MainContentProps {
   isPremium?: boolean;
   onShowSignIn?: () => void;
   onShowPayment?: () => void;
+  onYTPlay?: (videoId: string, title: string, thumbnail: string) => void;
 }
 
 const Accent = "#1DB954";
-const AccentPurple = "oklch(0.6 0.3 280)";
+const _AccentPurple = "oklch(0.6 0.3 280)";
 const SubtleColor = "#b3b3b3";
 const MutedColor = "#6a6a6a";
 
@@ -1106,7 +1107,7 @@ function YouTubeSearchResults({
     } catch (e) {
       if (e instanceof FallbackError) {
         setFallbackUrl(e.fallbackUrl);
-        setError("Search temporarily unavailable");
+        setError("Search unavailable — showing results on YouTube instead");
       } else {
         setError(e instanceof Error ? e.message : "Search failed");
       }
@@ -1201,10 +1202,19 @@ function YouTubeSearchResults({
               href={fallbackUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[13px] underline"
-              style={{ color: AccentPurple }}
+              style={{
+                color: "#1DB954",
+                fontSize: 14,
+                fontWeight: 600,
+                textDecoration: "none",
+                padding: "8px 20px",
+                border: "1px solid #1DB954",
+                borderRadius: 50,
+                display: "inline-block",
+                marginTop: 8,
+              }}
             >
-              View results on YouTube →
+              Search on YouTube →
             </a>
           ) : (
             <button
@@ -1254,7 +1264,8 @@ export default function MainContent({
   onSongPlay,
   onToggleLike,
   onMoreInfo,
-  onShowToast,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onShowToast: _onShowToast,
   onViewChange,
   onSearchChange,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1265,6 +1276,7 @@ export default function MainContent({
   onShowSignIn: _onShowSignIn,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onShowPayment: _onShowPayment,
+  onYTPlay,
 }: MainContentProps) {
   const likedSongs = songs.filter((s) => likedIds.has(s.id));
   const recentSongs = recentIds
@@ -1310,12 +1322,15 @@ export default function MainContent({
 
   // YouTube playback disabled — using local tracks only
   const handleSuggestionClick = (_song: Song) => {
-    onShowToast?.("YouTube playback disabled — using local tracks");
     onViewChange("search");
   };
 
-  const handleYTResultPlay = (_item: YouTubeItem) => {
-    onShowToast?.("YouTube playback disabled — using local tracks");
+  const handleYTResultPlay = (item: YouTubeItem) => {
+    onYTPlay?.(
+      item.id.videoId,
+      item.snippet.title,
+      item.snippet.thumbnails.medium.url,
+    );
   };
 
   const handleFeaturedPlayAll = (_artistSongs: ArtistSong[]) => {

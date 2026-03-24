@@ -67,6 +67,7 @@ export interface PlayerState {
   toggleMute: () => void;
   toggleAtmos: () => void;
   setAtmosMode: (mode: AudioMode) => void;
+  pauseAudio: () => void;
 }
 
 export function usePlayer(): PlayerState {
@@ -347,6 +348,13 @@ export function usePlayer(): PlayerState {
     }
   }, []);
 
+  const pauseAudio = useCallback(() => {
+    try {
+      audio.pause();
+    } catch (_) {}
+    setIsPlaying(false);
+  }, []);
+
   const currentSong = currentIdx >= 0 ? songs[currentIdx] : null;
   const isCurrentLiked = currentSong ? likedIds.has(currentSong.id) : false;
 
@@ -379,5 +387,6 @@ export function usePlayer(): PlayerState {
     toggleMute,
     toggleAtmos,
     setAtmosMode,
+    pauseAudio,
   };
 }
