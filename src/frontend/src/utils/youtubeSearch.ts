@@ -9,7 +9,7 @@ export interface YouTubeItem {
   };
 }
 
-// Thrown when all search methods fail — caller should redirect to YouTube
+// Thrown when all search methods fail — caller should show fallback link
 export class FallbackError extends Error {
   public readonly fallbackUrl: string;
   constructor(query: string, reason: string) {
@@ -19,54 +19,87 @@ export class FallbackError extends Error {
   }
 }
 
-// In-memory cache (layer 0 — fastest, ~5 min TTL)
+// In-memory cache (layer 0 — fastest, 5 min TTL)
 const memCache = new Map<string, { data: YouTubeItem[]; ts: number }>();
 const MEM_TTL_MS = 5 * 60 * 1000;
 
-// Read key from env — never hardcoded
-const YT_API_KEY =
-  (import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined) ?? "";
+/**
+ * Read the API key at call time (not module-load time).
+ * This ensures the key is picked up even if the module initialises before
+ * Vite has finished injecting `define` replacements in some edge cases.
+ */
+function getApiKey(): string {
+  // Vite replaces `import.meta.env.VITE_YOUTUBE_API_KEY` at build time
+  // via the `define` block in vite.config.js.
+  const key =
+    (import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined) ?? "";
+  return key.trim();
+}
 
 async function fetchFromYouTubeAPI(query: string): Promise<YouTubeItem[]> {
-  if (!YT_API_KEY) {
+  const apiKey = getApiKey();
+
+  // Debug: always log key status (masked for security)
+  if (!apiKey) {
     console.warn(
-      "[searchYouTube] VITE_YOUTUBE_API_KEY is not set — skipping API call",
+      "[YouTube Search] ❌ VITE_YOUTUBE_API_KEY is empty — check src/frontend/.env",
     );
     throw new FallbackError(query, "YouTube API key not configured");
   }
 
-  console.log(`[searchYouTube] Calling YouTube Data API for "${query}"`);
+  console.log(
+    `[YouTube Search] ✅ API key present (${apiKey.slice(0, 8)}...) — searching for "${query}"`,
+  );
 
   const url = new URL("https://www.googleapis.com/youtube/v3/search");
   url.searchParams.set("part", "snippet");
   url.searchParams.set("type", "video");
   url.searchParams.set("videoCategoryId", "10"); // Music only
-  url.searchParams.set("maxResults", "5");
+  url.searchParams.set("maxResults", "8");
   url.searchParams.set("q", query);
-  url.searchParams.set("key", YT_API_KEY);
+  url.searchParams.set("key", apiKey);
 
-  const res = await fetch(url.toString());
+  let res: Response;
+  try {
+    res = await fetch(url.toString());
+  } catch (networkErr) {
+    console.error("[YouTube Search] 🌐 Network error:", networkErr);
+    throw new FallbackError(query, "Network error — check your connection");
+  }
+
   const data = (await res.json()) as {
     items?: YouTubeItem[];
     error?: { message?: string; code?: number; errors?: { reason?: string }[] };
   };
 
+  console.log(
+    "[YouTube Search] API response status:",
+    res.status,
+    "| items:",
+    data.items?.length ?? 0,
+  );
+
   if (!res.ok || data.error) {
     const code = data.error?.code ?? res.status;
     const reason = data.error?.errors?.[0]?.reason ?? "";
     const msg = data.error?.message ?? `HTTP ${code}`;
-    console.error(`[searchYouTube] API error (${code}): ${msg}`);
+    console.error(`[YouTube Search] ❌ API error (${code} ${reason}): ${msg}`);
 
     if (code === 403 && reason === "quotaExceeded") {
-      throw new FallbackError(query, "Search limit reached. Try later");
+      throw new FallbackError(
+        query,
+        "Daily search quota reached — results on YouTube:",
+      );
     }
     if (code === 400 || code === 403) {
-      throw new FallbackError(query, "Search unavailable. Try again later");
+      throw new FallbackError(query, `API error: ${msg}`);
     }
     throw new FallbackError(query, msg);
   }
 
-  return Array.isArray(data.items) ? data.items : [];
+  const items = Array.isArray(data.items) ? data.items : [];
+  console.log(`[YouTube Search] ✅ Got ${items.length} results for "${query}"`);
+  return items;
 }
 
 export async function searchYouTube(
@@ -75,29 +108,27 @@ export async function searchYouTube(
   _actor?: unknown,
 ): Promise<YouTubeItem[]> {
   const query = q.trim();
+  if (!query) return [];
 
   // Layer 0: In-memory cache
   const memEntry = memCache.get(query);
   if (memEntry && Date.now() - memEntry.ts < MEM_TTL_MS) {
-    console.log(`[searchYouTube] Memory cache HIT for "${query}"`);
+    console.log(`[YouTube Search] 🗂 Memory cache HIT for "${query}"`);
     return memEntry.data;
   }
 
   // Layer 1: LocalStorage cache (12h)
   const lsEntry = getCachedSearch(query);
   if (lsEntry) {
-    console.log(`[searchYouTube] LocalStorage cache HIT for "${query}"`);
+    console.log(`[YouTube Search] 🗂 LocalStorage cache HIT for "${query}"`);
     const items = lsEntry.data as YouTubeItem[];
     memCache.set(query, { data: items, ts: Date.now() });
     return items;
   }
 
-  // Layer 2: YouTube Data API v3
+  // Layer 2: Live YouTube Data API v3
   try {
     const items = await fetchFromYouTubeAPI(query);
-    console.log(
-      `[searchYouTube] YouTube API returned ${items.length} results for "${query}"`,
-    );
     if (items.length > 0) {
       memCache.set(query, { data: items, ts: Date.now() });
       setCachedSearch(query, items);
@@ -105,7 +136,7 @@ export async function searchYouTube(
     return items;
   } catch (err) {
     if (err instanceof FallbackError) throw err;
-    console.error("[searchYouTube] Unexpected error:", err);
+    console.error("[YouTube Search] Unexpected error:", err);
     throw new FallbackError(
       query,
       err instanceof Error ? err.message : "Search unavailable",

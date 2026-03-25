@@ -35,6 +35,7 @@ function loadVolume(): number {
 
 // Single global audio instance — created once at module level
 const audio = new Audio();
+audio.crossOrigin = "anonymous";
 audio.preload = "metadata";
 audio.volume = loadVolume();
 

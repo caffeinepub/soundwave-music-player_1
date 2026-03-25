@@ -16,6 +16,10 @@ import {
 } from "../data/artistPlaylists";
 import { type Song, colorGradients, formatTime } from "../data/songs";
 import type { AuthUser } from "../hooks/useAuth";
+import {
+  type TrendingItem,
+  useTrendingYouTube,
+} from "../hooks/useTrendingYouTube";
 import AIRecommendations from "./AIRecommendations";
 import CinematicHero from "./CinematicHero";
 
@@ -219,6 +223,144 @@ function getArtistImage(name: string): string {
 }
 
 // ── Artist Card ──────────────────────────────────────────────────────────────
+// ── YouTube Trending Card ───────────────────────────────────────────────────
+
+function YTCard({
+  item,
+  isFirst,
+  onPlay,
+}: {
+  item: TrendingItem;
+  isFirst: boolean;
+  onPlay: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      data-ocid="yt.card"
+      onClick={onPlay}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        width: "clamp(130px, 14vw, 160px)",
+        height: "clamp(180px, 20vw, 220px)",
+        flexShrink: 0,
+        border: "none",
+        background: "transparent",
+        cursor: "pointer",
+        borderRadius: 12,
+        overflow: "hidden",
+        position: "relative",
+        transform: hovered ? "scale(1.05)" : "scale(1)",
+        transition: "transform 0.2s ease",
+        boxShadow: hovered
+          ? "0 8px 32px rgba(30,215,96,0.25), 0 0 0 1px rgba(30,215,96,0.15)"
+          : "none",
+      }}
+    >
+      {/* Thumbnail */}
+      <img
+        src={item.thumbnail}
+        alt={item.title}
+        loading="lazy"
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          display: "block",
+        }}
+      />
+      {/* Gradient overlay */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.88) 100%)",
+        }}
+      />
+      {/* LIVE badge on first card */}
+      {isFirst && (
+        <div
+          style={{
+            position: "absolute",
+            top: 8,
+            left: 8,
+            background: "#ff0000",
+            color: "#fff",
+            fontSize: 9,
+            fontWeight: 900,
+            letterSpacing: "0.1em",
+            padding: "2px 6px",
+            borderRadius: 4,
+          }}
+        >
+          LIVE
+        </div>
+      )}
+      {/* Play icon on hover */}
+      {hovered && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            background: "rgba(30,215,96,0.9)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Play size={18} fill="#000" stroke="none" />
+        </div>
+      )}
+      {/* Title / channel */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: "8px 10px",
+          textAlign: "left",
+        }}
+      >
+        <div
+          style={{
+            color: "#fff",
+            fontSize: 11,
+            fontWeight: 700,
+            lineHeight: 1.35,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {item.title}
+        </div>
+        <div
+          style={{
+            color: "rgba(255,255,255,0.6)",
+            fontSize: 10,
+            marginTop: 2,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {item.channelTitle}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 function ArtistCard({
   name,
   onPlay,
@@ -1106,8 +1248,12 @@ function YouTubeSearchResults({
       if (items.length === 0) setError("No YouTube results found");
     } catch (e) {
       if (e instanceof FallbackError) {
-        setFallbackUrl(e.fallbackUrl);
-        setError("Search unavailable — showing results on YouTube instead");
+        // Open YouTube directly as fallback — no error screen
+        window.open(
+          `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
       } else {
         setError(e instanceof Error ? e.message : "Search failed");
       }
@@ -1282,6 +1428,41 @@ export default function MainContent({
   const recentSongs = recentIds
     .map((idx) => songs[idx])
     .filter(Boolean) as Song[];
+
+  // Trending YouTube
+  const { items: trendingItems, loading: trendingLoading } =
+    useTrendingYouTube();
+
+  // "Because You Listened To..." recommendation state
+  const [becauseItems, setBecauseItems] = useState<TrendingItem[]>([]);
+  const [becauseArtist, setBecauseArtist] = useState("trending music india");
+
+  useEffect(() => {
+    const recentArr = recentIds.slice(0, 1);
+    const artist =
+      recentArr.length > 0 && songs[recentArr[0]]
+        ? songs[recentArr[0]].artist
+        : "trending music india";
+    setBecauseArtist(artist);
+
+    const query =
+      artist !== "trending music india"
+        ? `${artist} best songs`
+        : "trending music india";
+    import("../utils/youtubeSearch").then(({ searchYouTube }) => {
+      searchYouTube(query)
+        .then((results) => {
+          const mapped: TrendingItem[] = results.slice(0, 8).map((r) => ({
+            videoId: r.id.videoId,
+            title: r.snippet.title,
+            channelTitle: r.snippet.channelTitle,
+            thumbnail: r.snippet.thumbnails.medium.url,
+          }));
+          setBecauseItems(mapped);
+        })
+        .catch(() => {});
+    });
+  }, [recentIds, songs]);
 
   // Scroll fade-in for sections
   useEffect(() => {
@@ -1544,6 +1725,64 @@ export default function MainContent({
               isPlaying={isPlaying}
               onPlay={onSongPlay}
             />
+
+            {/* 🔥 Trending Now (YouTube) */}
+            <HorizontalRow title="🔥 Trending Now">
+              {trendingLoading
+                ? ["s1", "s2", "s3", "s4", "s5", "s6"].map((k) => (
+                    <div key={k} style={{ width: 160, flexShrink: 0 }}>
+                      <Skeleton
+                        style={{ width: 160, height: 220, borderRadius: 12 }}
+                      />
+                    </div>
+                  ))
+                : trendingItems.map((item, i) => (
+                    <motion.div
+                      key={item.videoId}
+                      initial={{ opacity: 0, y: 20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.05, duration: 0.35 }}
+                    >
+                      <YTCard
+                        item={item}
+                        isFirst={i === 0}
+                        onPlay={() =>
+                          onYTPlay?.(item.videoId, item.title, item.thumbnail)
+                        }
+                      />
+                    </motion.div>
+                  ))}
+            </HorizontalRow>
+
+            {/* ✨ Because You Listened To... */}
+            {becauseItems.length > 0 && (
+              <HorizontalRow
+                title={
+                  becauseArtist !== "trending music india"
+                    ? `✨ Because you listened to ${becauseArtist}`
+                    : "✨ Recommended for You"
+                }
+              >
+                {becauseItems.map((item, i) => (
+                  <motion.div
+                    key={item.videoId}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.05, duration: 0.35 }}
+                  >
+                    <YTCard
+                      item={item}
+                      isFirst={false}
+                      onPlay={() =>
+                        onYTPlay?.(item.videoId, item.title, item.thumbnail)
+                      }
+                    />
+                  </motion.div>
+                ))}
+              </HorizontalRow>
+            )}
 
             {/* Featured Artist Playlists */}
             <HorizontalRow title="Featured Artists">

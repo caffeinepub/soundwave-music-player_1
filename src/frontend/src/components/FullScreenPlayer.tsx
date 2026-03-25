@@ -42,6 +42,7 @@ interface FullScreenPlayerProps {
   onToggleLike: () => void;
   onToggleQueue: () => void;
   onToggleAtmos: () => void;
+  onOpenXRay?: () => void;
 }
 
 const Accent = "#1DB954";
@@ -74,6 +75,7 @@ export default function FullScreenPlayer({
   onToggleLike,
   onToggleQueue,
   onToggleAtmos,
+  onOpenXRay,
 }: FullScreenPlayerProps) {
   const progressRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
@@ -127,7 +129,7 @@ export default function FullScreenPlayer({
             ...gradientStyle,
           }}
         >
-          {/* Close button */}
+          {/* Header row with close + xray buttons */}
           <button
             type="button"
             data-ocid="fullscreen_player.close_button"
@@ -150,6 +152,32 @@ export default function FullScreenPlayer({
           >
             <ChevronDown size={20} aria-hidden="true" />
           </button>
+
+          {/* X-Ray button */}
+          {onOpenXRay && (
+            <button
+              type="button"
+              data-ocid="fullscreen_player.xray.button"
+              onClick={onOpenXRay}
+              style={{
+                position: "absolute",
+                top: 20,
+                right: 20,
+                background: "rgba(30,215,96,0.1)",
+                border: "1px solid rgba(30,215,96,0.3)",
+                borderRadius: 6,
+                padding: "6px 14px",
+                color: "#1ed760",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: "0.15em",
+                fontFamily: "monospace",
+              }}
+            >
+              X-RAY
+            </button>
+          )}
 
           {/* Album art */}
           {song && (

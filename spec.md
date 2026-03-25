@@ -1,40 +1,40 @@
 # Soundwave Music Player
 
 ## Current State
-Full-featured music streaming app with:
-- Dual-player system (HTML5 Audio + YouTube IFrame API) in usePlayer.ts (909 lines)
-- CinematicHero component with Coverr CDN video background
-- PaymentModal with Razorpay checkout (UPI via Razorpay)
-- PlayerBar, FullScreenPlayer, AIChat, Firebase auth all wired
-- SoundHelix MP3 URLs in songs.ts
+
+A fully-featured React + Vite music streaming app (v59) with:
+- Global HTML5 Audio for SoundHelix local tracks (usePlayer hook)
+- YouTubePlayerEmbed component showing a visible iframe panel (not hidden)
+- YouTube Data API v3 search with live results dropdown in MainContent
+- Cinematic hero, AI chat, Dolby Atmos toggle, Firebase auth, Razorpay payments
+- MainContent has carousels for local songs, artist rows, AI recommendations
+- PlayerBar shown for local tracks; YouTubePlayerEmbed panel shown separately for YouTube
 
 ## Requested Changes (Diff)
 
 ### Add
-- UPI direct payment option in PaymentModal: QR code display + UPI ID (PhonePe/GPay) with simulated success flow
-- Hero fallback image using a reliable CDN (Unsplash/Pexels) when video fails
-- "More Info" modal handler wired in App.tsx → MainContent → CinematicHero
+- Hidden YouTube IFrame Player API (useYouTubePlayer hook): load youtube.com/iframe_api, create YT.Player at 1x1px off-screen. Exposes loadVideo, play, pause, seekTo, setVolume, getProgress. Progress polled every 300ms.
+- Unified PlayerBar for YouTube tracks: when YouTube is active, show same PlayerBar synced to hidden YT IFrame.
+- YouTube Trending carousel: fetch youtube.com/v3/videos?chart=mostPopular&videoCategoryId=10, show horizontal scroll row "Trending Now". Fallback to curated videoIds if API fails.
+- "Because You Listened To..." carousel: reads sw_recent from localStorage, searches YouTube for last artist + "similar", shows as horizontal row.
+- X-Ray side panel (XRayPanel): collapsible right-side drawer from FullScreenPlayer with simulated artist trivia, bio, top facts.
+- Dynamic accent color: canvas sample dominant color from YouTube thumbnail; apply as CSS var --accent-dynamic on player glow/border.
 
 ### Modify
-- **usePlayer.ts**: Remove dual-player complexity, use ONE global HTML5 Audio instance only. Remove all YouTube IFrame API code (no playYT, no ytQueue, etc.). Keep queue, shuffle, repeat, seek, volume, like, recent, progress. All songs play from .src (SoundHelix URLs).
-- **audioEngine.ts**: Remove ytVolumeInterval and YouTube-specific methods. Keep Web Audio API effects for local tracks only.
-- **CinematicHero.tsx**: Fix hero background video/image visibility. Add fallback Unsplash image. Ensure z-index layering is correct. Wire More Info button to open a details modal.
-- **App.tsx**: Remove YouTube IFrame player div and all ytQueue/ytQueueIdx/playYT/playExternalSong/pauseHiddenYT/resumeHiddenYT references. Add moreInfo modal state + handler. Simplify player prop passing.
-- **PlayerBar.tsx**: Remove currentMode/youtube-specific branching. Always show waveform for local tracks.
-- **MainContent.tsx**: Remove onPlayYT/onPlayYouTubeSong props and YouTube result card play handlers. Keep search UI but clicking YouTube results plays via HTML5 audio fallback or ignores YT-only tracks.
-- **PaymentModal.tsx**: Add a second payment path: "Pay via UPI" tab that shows a QR code image + UPI ID text. Simulates success after 3s delay when user clicks "I've Paid".
+- YouTubePlayerEmbed.tsx: rewrite to hidden 1x1px div off-screen. YT.Player API only. No visible iframe panel.
+- App.tsx: always show PlayerBar; route controls to ytPlayer or localPlayer based on which is active.
+- MainContent.tsx: add Trending and "Because You Listened To..." rows to home view.
 
 ### Remove
-- YouTube IFrame API integration from player hook
-- Hidden YT player div from App.tsx
-- ytQueue, ytQueueIdx, playYT, playExternalSong, pauseHiddenYT, resumeHiddenYT from usePlayer
-- currentMode="youtube" branching throughout components
+- Visible YouTube embed panel (slide-up iframe)
+- The !ytVideoId condition that hides PlayerBar during YouTube playback
 
 ## Implementation Plan
-1. Rewrite usePlayer.ts — single HTML5 Audio instance, remove all YT code
-2. Update audioEngine.ts — remove ytVolumeInterval, keep audio effects
-3. Fix CinematicHero.tsx — ensure video visible, add fallback image, fix z-index, add More Info modal
-4. Update App.tsx — remove YT references, add More Info modal, simplify
-5. Update PlayerBar.tsx — remove currentMode prop dependency
-6. Update MainContent.tsx — remove YT-specific play handlers
-7. Enhance PaymentModal.tsx — add UPI direct tab with QR + simulated success
+
+1. Create useYouTubePlayer.ts hook with YT IFrame API, queue, state, progress polling
+2. Rewrite YouTubePlayerEmbed.tsx to mount hidden 1x1px div
+3. Create XRayPanel.tsx with artist trivia drawer
+4. Create useTrendingYouTube.ts hook
+5. Update MainContent.tsx with two new carousels
+6. Update App.tsx for unified PlayerBar
+7. Dynamic accent color via canvas thumbnail sampling

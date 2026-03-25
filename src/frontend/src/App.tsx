@@ -10,13 +10,13 @@ import QueuePanel from "./components/QueuePanel";
 import Sidebar from "./components/Sidebar";
 import SignInModal from "./components/SignInModal";
 import Toast from "./components/Toast";
-import YouTubePlayerEmbed, {
-  stopYTPlayer,
-} from "./components/YouTubePlayerEmbed";
+import XRayPanel from "./components/XRayPanel";
+import YouTubePlayerEmbed from "./components/YouTubePlayerEmbed";
 import { songs } from "./data/songs";
 import { type AuthUser, useAuth } from "./hooks/useAuth";
 import { usePlayer } from "./hooks/usePlayer";
 import { usePremium } from "./hooks/usePremium";
+import { useYouTubePlayer } from "./hooks/useYouTubePlayer";
 
 type ActiveView = "home" | "search" | "liked" | "recent";
 
@@ -39,12 +39,14 @@ export default function App() {
   const [showSignIn, setShowSignIn] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [showMoreInfo, setShowMoreInfo] = useState(false);
+  const [isXRayOpen, setIsXRayOpen] = useState(false);
   const { isPremium, activatePremium, daysLeft } = usePremium();
 
   const { user, loading: authLoading, signOut } = useAuth();
   const player = usePlayer();
-  const [ytVideoId, setYtVideoId] = useState<string | null>(null);
-  const [ytTitle, setYtTitle] = useState("");
+  const ytPlayer = useYouTubePlayer();
+
+  const ytActive = ytPlayer.ytActive;
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -52,15 +54,25 @@ export default function App() {
       if ((e.target as HTMLElement).tagName === "INPUT") return;
       if (e.code === "Space") {
         e.preventDefault();
-        player.togglePlay();
+        if (ytActive) {
+          ytPlayer.togglePlay();
+        } else {
+          player.togglePlay();
+        }
       }
-      if (e.code === "ArrowRight" && !e.shiftKey) player.nextTrack();
-      if (e.code === "ArrowLeft" && !e.shiftKey) player.prevTrack();
-      if (e.code === "KeyL") player.toggleLike();
+      if (e.code === "ArrowRight" && !e.shiftKey) {
+        if (ytActive) ytPlayer.nextTrack();
+        else player.nextTrack();
+      }
+      if (e.code === "ArrowLeft" && !e.shiftKey) {
+        if (ytActive) ytPlayer.prevTrack();
+        else player.prevTrack();
+      }
+      if (e.code === "KeyL" && !ytActive) player.toggleLike();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [player]);
+  }, [player, ytPlayer, ytActive]);
 
   const handleNavChange = (nav: string) => {
     if (
@@ -77,22 +89,43 @@ export default function App() {
     setShowSignIn(false);
   };
 
-  const handleYTPlay = (videoId: string, title: string) => {
+  const handleYTPlay = (videoId: string, title: string, thumbnail: string) => {
     player.pauseAudio();
-    setYtVideoId(videoId);
-    setYtTitle(title);
-  };
-
-  const handleYTClose = () => {
-    setYtVideoId(null);
-    setYtTitle("");
+    ytPlayer.loadVideo(videoId, title, thumbnail);
   };
 
   const handleLocalPlay = (idx: number) => {
-    stopYTPlayer();
-    setYtVideoId(null);
+    ytPlayer.stop();
     player.playTrack(idx);
   };
+
+  // Unified player props
+  const ytSong = ytActive
+    ? {
+        id: ytPlayer.ytVideoId ?? "yt",
+        title: ytPlayer.ytTitle || "YouTube",
+        artist: "YouTube",
+        emoji: "\u25B6",
+        colorClass: "c1",
+        src: "",
+        duration: ytPlayer.duration,
+      }
+    : null;
+
+  const activeSong = ytActive ? ytSong : player.currentSong;
+  const activeIsPlaying = ytActive ? ytPlayer.isPlaying : player.isPlaying;
+  const activeProgress = ytActive ? ytPlayer.progress : player.progress;
+  const activeCurrentTime = ytActive
+    ? ytPlayer.currentTime
+    : player.currentTime;
+  const activeDuration = ytActive ? ytPlayer.duration : player.duration;
+  const activeVolume = ytActive ? ytPlayer.volume : player.volume;
+
+  const handleTogglePlay = ytActive ? ytPlayer.togglePlay : player.togglePlay;
+  const handleSeek = ytActive ? ytPlayer.seekTo : player.seek;
+  const handleVolumeChange = ytActive ? ytPlayer.setVolume : player.setVolume;
+  const handleNext = ytActive ? ytPlayer.nextTrack : player.nextTrack;
+  const handlePrev = ytActive ? ytPlayer.prevTrack : player.prevTrack;
 
   if (authLoading) {
     return (
@@ -141,6 +174,17 @@ export default function App() {
         plan={PREMIUM_PLAN}
         onClose={() => setShowPayment(false)}
         onSuccess={activatePremium}
+      />
+
+      {/* X-Ray Panel */}
+      <XRayPanel
+        isOpen={isXRayOpen}
+        onClose={() => setIsXRayOpen(false)}
+        songTitle={
+          ytActive ? ytPlayer.ytTitle : (player.currentSong?.title ?? "")
+        }
+        artist={ytActive ? "YouTube" : (player.currentSong?.artist ?? "")}
+        thumbnail={ytActive ? ytPlayer.ytThumbnail : ""}
       />
 
       {/* More Info Modal */}
@@ -339,64 +383,62 @@ export default function App() {
         onYTPlay={handleYTPlay}
       />
 
-      <YouTubePlayerEmbed
-        videoId={ytVideoId}
-        title={ytTitle}
-        onClose={handleYTClose}
-      />
+      {/* Hidden YouTube player - always mounted */}
+      <YouTubePlayerEmbed />
 
-      {!ytVideoId && (
-        <PlayerBar
-          song={player.currentSong}
-          isPlaying={player.isPlaying}
-          progress={player.progress}
-          currentTime={player.currentTime}
-          duration={player.duration}
-          volume={player.volume}
-          isShuffled={player.isShuffle}
-          repeatMode={player.repeatMode}
-          isLiked={player.isCurrentLiked}
-          isQueueOpen={isQueueOpen}
-          atmosMode={player.atmosMode}
-          onTogglePlay={player.togglePlay}
-          onPrev={player.prevTrack}
-          onNext={player.nextTrack}
-          onSeek={player.seek}
-          onVolumeChange={player.setVolume}
-          onToggleShuffle={player.toggleShuffle}
-          onToggleRepeat={player.toggleRepeat}
-          onToggleLike={player.toggleLike}
-          onToggleQueue={() => setIsQueueOpen((prev) => !prev)}
-          onToggleAtmos={player.toggleAtmos}
-          audioUrl={player.currentSong?.src ?? ""}
-          onExpandPlayer={() => setIsFullScreenPlayerOpen(true)}
-        />
-      )}
+      {/* Unified PlayerBar - always visible */}
+      <PlayerBar
+        song={activeSong}
+        isPlaying={activeIsPlaying}
+        progress={activeProgress}
+        currentTime={activeCurrentTime}
+        duration={activeDuration}
+        volume={activeVolume}
+        isShuffled={player.isShuffle}
+        repeatMode={player.repeatMode}
+        isLiked={ytActive ? false : player.isCurrentLiked}
+        isQueueOpen={isQueueOpen}
+        atmosMode={player.atmosMode}
+        thumbnail={ytActive ? ytPlayer.ytThumbnail : undefined}
+        onTogglePlay={handleTogglePlay}
+        onPrev={handlePrev}
+        onNext={handleNext}
+        onSeek={handleSeek}
+        onVolumeChange={handleVolumeChange}
+        onToggleShuffle={player.toggleShuffle}
+        onToggleRepeat={player.toggleRepeat}
+        onToggleLike={ytActive ? () => {} : player.toggleLike}
+        onToggleQueue={() => setIsQueueOpen((prev) => !prev)}
+        onToggleAtmos={player.toggleAtmos}
+        audioUrl={ytActive ? undefined : (player.currentSong?.src ?? "")}
+        onExpandPlayer={() => setIsFullScreenPlayerOpen(true)}
+      />
 
       <FullScreenPlayer
         isOpen={isFullScreenPlayerOpen}
         onClose={() => setIsFullScreenPlayerOpen(false)}
-        song={player.currentSong}
-        isPlaying={player.isPlaying}
-        progress={player.progress}
-        currentTime={player.currentTime}
-        duration={player.duration}
-        volume={player.volume}
+        song={ytActive ? ytSong : player.currentSong}
+        isPlaying={activeIsPlaying}
+        progress={activeProgress}
+        currentTime={activeCurrentTime}
+        duration={activeDuration}
+        volume={activeVolume}
         isShuffled={player.isShuffle}
         repeatMode={player.repeatMode}
-        isLiked={player.isCurrentLiked}
+        isLiked={ytActive ? false : player.isCurrentLiked}
         isQueueOpen={isQueueOpen}
         atmosMode={player.atmosMode}
-        onTogglePlay={player.togglePlay}
-        onPrev={player.prevTrack}
-        onNext={player.nextTrack}
-        onSeek={player.seek}
-        onVolumeChange={player.setVolume}
+        onTogglePlay={handleTogglePlay}
+        onPrev={handlePrev}
+        onNext={handleNext}
+        onSeek={handleSeek}
+        onVolumeChange={handleVolumeChange}
         onToggleShuffle={player.toggleShuffle}
         onToggleRepeat={player.toggleRepeat}
-        onToggleLike={player.toggleLike}
+        onToggleLike={ytActive ? () => {} : player.toggleLike}
         onToggleQueue={() => setIsQueueOpen((prev) => !prev)}
         onToggleAtmos={player.toggleAtmos}
+        onOpenXRay={() => setIsXRayOpen(true)}
       />
 
       <QueuePanel

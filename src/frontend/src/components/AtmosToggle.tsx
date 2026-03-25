@@ -59,10 +59,10 @@ export default function AtmosToggle({ mode, onToggle }: AtmosToggleProps) {
           gap: 6,
           padding: "5px 12px",
           borderRadius: 20,
-          background: "linear-gradient(135deg, #1a3a2a 0%, #0d2018 100%)",
-          border: "1px solid rgba(29,185,84,0.4)",
+          background: "linear-gradient(135deg, #2d1a5e 0%, #1a0e3d 100%)",
+          border: "1px solid rgba(124,77,255,0.4)",
           boxShadow:
-            "0 0 12px rgba(29,185,84,0.4), 0 0 4px rgba(29,185,84,0.2)",
+            "0 0 12px rgba(124,77,255,0.5), 0 0 4px rgba(124,77,255,0.2)",
           cursor: "pointer",
           position: "relative",
           overflow: "visible",
@@ -107,7 +107,7 @@ export default function AtmosToggle({ mode, onToggle }: AtmosToggleProps) {
               position: "absolute",
               inset: -4,
               borderRadius: 24,
-              border: "1px solid rgba(29,185,84,0.5)",
+              border: "1px solid rgba(124,77,255,0.5)",
               animation: "atmos-pulse 2s ease-out infinite",
               pointerEvents: "none",
             }}
@@ -119,7 +119,7 @@ export default function AtmosToggle({ mode, onToggle }: AtmosToggleProps) {
           aria-hidden="true"
           style={{
             fontSize: 10,
-            color: isOn ? "#1DB954" : "#6a6a6a",
+            color: isOn ? "#a78bfa" : "#6a6a6a",
             lineHeight: 1,
             transition: "color 0.3s ease",
           }}
@@ -133,7 +133,7 @@ export default function AtmosToggle({ mode, onToggle }: AtmosToggleProps) {
             fontSize: 11,
             fontWeight: 600,
             letterSpacing: "0.02em",
-            color: isOn ? "#1DB954" : "#6a6a6a",
+            color: isOn ? "#a78bfa" : "#6a6a6a",
             transition: "color 0.3s ease",
           }}
         >
@@ -158,7 +158,7 @@ export default function AtmosToggle({ mode, onToggle }: AtmosToggleProps) {
                 style={{
                   display: "block",
                   width: 2,
-                  background: "#1DB954",
+                  background: "#7c4dff",
                   borderRadius: 2,
                   height: 8,
                   transformOrigin: "bottom",
