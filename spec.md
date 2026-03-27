@@ -2,50 +2,39 @@
 
 ## Current State
 
-Soundwave is a React + Vite music streaming app (version 60) with:
-- `usePlayer` hook: single global HTML5 Audio instance for SoundHelix/MP3 tracks
-- `useYouTubePlayer` hook: YT IFrame Player API, currently mounts a 1x1 hidden div (`yt-hidden-player`) at top:-9999px — not policy-compliant
-- `YouTubePlayerEmbed` component: renders the hidden div (no visible player)
-- `PlayerBar` component: unified controls for both audio and YT modes
-- `QueuePanel`: local songs queue (localStorage for liked/recent/volume)
-- No YT queue/last-played localStorage persistence
-- No mini-player for YouTube playback
+A fully-featured React + Vite music streaming app (v59) with:
+- Global HTML5 Audio for SoundHelix local tracks (usePlayer hook)
+- YouTubePlayerEmbed component showing a visible iframe panel (not hidden)
+- YouTube Data API v3 search with live results dropdown in MainContent
+- Cinematic hero, AI chat, Dolby Atmos toggle, Firebase auth, Razorpay payments
+- MainContent has carousels for local songs, artist rows, AI recommendations
+- PlayerBar shown for local tracks; YouTubePlayerEmbed panel shown separately for YouTube
 
 ## Requested Changes (Diff)
 
 ### Add
-- `YouTubeMiniPlayer.tsx`: fixed bottom-right mini-player component containing the visible YouTube iframe (policy-compliant). Small by default (200×113), expandable to 360×203. Has title overlay, close button, expand/collapse toggle. Smooth slide-in animation on mount. Hidden when `ytActive` is false.
-- Queue localStorage persistence in `useYouTubePlayer`: save/restore full queue (`sw_yt_queue`) and last-played track (`sw_yt_last`) across page refreshes. On restore, mark `ytActive=true` and populate track info but do NOT autoplay — user must press play.
-- `needsLoad` ref in `useYouTubePlayer`: tracks whether a restored video hasn't been loaded into the iframe yet. On first `togglePlay` after restore, call `loadVideoById` then `playVideo`.
+- Hidden YouTube IFrame Player API (useYouTubePlayer hook): load youtube.com/iframe_api, create YT.Player at 1x1px off-screen. Exposes loadVideo, play, pause, seekTo, setVolume, getProgress. Progress polled every 300ms.
+- Unified PlayerBar for YouTube tracks: when YouTube is active, show same PlayerBar synced to hidden YT IFrame.
+- YouTube Trending carousel: fetch youtube.com/v3/videos?chart=mostPopular&videoCategoryId=10, show horizontal scroll row "Trending Now". Fallback to curated videoIds if API fails.
+- "Because You Listened To..." carousel: reads sw_recent from localStorage, searches YouTube for last artist + "similar", shows as horizontal row.
+- X-Ray side panel (XRayPanel): collapsible right-side drawer from FullScreenPlayer with simulated artist trivia, bio, top facts.
+- Dynamic accent color: canvas sample dominant color from YouTube thumbnail; apply as CSS var --accent-dynamic on player glow/border.
 
 ### Modify
-- `useYouTubePlayer.ts`: change player mount target from `yt-hidden-player` (hidden off-screen div) to `yt-mini-container` (inside the visible mini-player). Remove `ensureHiddenDiv()`. Add LS persistence for queue and last-played. Handle no-autoplay restore.
-- `YouTubePlayerEmbed.tsx`: replaced entirely by `YouTubeMiniPlayer.tsx`.
-- `App.tsx`: import and render `YouTubeMiniPlayer` instead of `YouTubePlayerEmbed`. Pass `ytPlayer` props to it.
+- YouTubePlayerEmbed.tsx: rewrite to hidden 1x1px div off-screen. YT.Player API only. No visible iframe panel.
+- App.tsx: always show PlayerBar; route controls to ytPlayer or localPlayer based on which is active.
+- MainContent.tsx: add Trending and "Because You Listened To..." rows to home view.
 
 ### Remove
-- `ensureHiddenDiv()` helper in `useYouTubePlayer` — no longer needed since div is React-managed
-- `YouTubePlayerEmbed.tsx` — superseded by `YouTubeMiniPlayer.tsx`
+- Visible YouTube embed panel (slide-up iframe)
+- The !ytVideoId condition that hides PlayerBar during YouTube playback
 
 ## Implementation Plan
 
-1. Update `useYouTubePlayer.ts`:
-   - Change `MINI_PLAYER_DIV_ID = 'yt-mini-container'`
-   - Remove `ensureHiddenDiv()` and its call in `useEffect`
-   - Add `loadLastPlayed()` / `loadYTQueue()` helpers reading from localStorage
-   - On init: if `lastPlayed` exists, set `ytActive=true`, `ytVideoId`, `ytTitle`, `ytThumbnail` — but set `needsLoad=true` (don't call `loadVideoById`)
-   - On `togglePlay` when paused: if `needsLoad=true`, call `loadVideoById(ytVideoId)` first, then `playVideo`; clear `needsLoad`
-   - Save queue to `sw_yt_queue` on every queue mutation
-   - Save last-played to `sw_yt_last` whenever `loadVideoInternal` is called
-
-2. Create `YouTubeMiniPlayer.tsx`:
-   - `position: fixed; bottom: 100px; right: 16px; z-index: 500`
-   - AnimatePresence slide-up on mount when `ytActive`
-   - Collapsed: 200×113 iframe + title overlay bar at bottom
-   - Expanded: 360×203 iframe + title overlay
-   - Buttons: expand/collapse (ChevronUp/Down), close (X stops YT)
-   - Glassmorphism container: `rgba(15,21,32,0.9)`, `backdrop-filter: blur(16px)`, neon green top border
-   - Renders `<div id="yt-mini-container">` which the YT IFrame API targets
-
-3. Update `App.tsx`:
-   - Replace `<YouTubePlayerEmbed />` with `<YouTubeMiniPlayer ytPlayer={ytPlayer} />`
+1. Create useYouTubePlayer.ts hook with YT IFrame API, queue, state, progress polling
+2. Rewrite YouTubePlayerEmbed.tsx to mount hidden 1x1px div
+3. Create XRayPanel.tsx with artist trivia drawer
+4. Create useTrendingYouTube.ts hook
+5. Update MainContent.tsx with two new carousels
+6. Update App.tsx for unified PlayerBar
+7. Dynamic accent color via canvas thumbnail sampling
