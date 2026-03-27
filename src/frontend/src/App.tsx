@@ -11,7 +11,7 @@ import Sidebar from "./components/Sidebar";
 import SignInModal from "./components/SignInModal";
 import Toast from "./components/Toast";
 import XRayPanel from "./components/XRayPanel";
-import YouTubePlayerEmbed from "./components/YouTubePlayerEmbed";
+import YouTubeMiniPlayer from "./components/YouTubeMiniPlayer";
 import { songs } from "./data/songs";
 import { type AuthUser, useAuth } from "./hooks/useAuth";
 import { usePlayer } from "./hooks/usePlayer";
@@ -383,8 +383,8 @@ export default function App() {
         onYTPlay={handleYTPlay}
       />
 
-      {/* Hidden YouTube player - always mounted */}
-      <YouTubePlayerEmbed />
+      {/* Policy-compliant YouTube mini-player (always mounted so YT API can init) */}
+      <YouTubeMiniPlayer ytPlayer={ytPlayer} />
 
       {/* Unified PlayerBar - always visible */}
       <PlayerBar

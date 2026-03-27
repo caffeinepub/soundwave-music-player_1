@@ -51,7 +51,6 @@ function loadYTScript(onReady: () => void) {
   if (scriptLoading) return;
   scriptLoading = true;
 
-  // Must be set BEFORE script loads
   window.onYouTubeIframeAPIReady = () => {
     scriptLoaded = true;
     for (const cb of readyCallbacks) cb();
@@ -63,43 +62,76 @@ function loadYTScript(onReady: () => void) {
   document.head.appendChild(tag);
 }
 
-const HIDDEN_DIV_ID = "yt-hidden-player";
+// The div rendered by YouTubeMiniPlayer component
+export const MINI_PLAYER_DIV_ID = "yt-mini-container";
 
-function ensureHiddenDiv(): HTMLElement {
-  let el = document.getElementById(HIDDEN_DIV_ID);
-  if (!el) {
-    el = document.createElement("div");
-    el.id = HIDDEN_DIV_ID;
-    el.style.cssText =
-      "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;z-index:-1;pointer-events:none;";
-    document.body.appendChild(el);
+// ── LocalStorage persistence ──────────────────────────────────────────────
+const LS_YT_QUEUE = "sw_yt_queue";
+const LS_YT_LAST = "sw_yt_last";
+
+function loadYTQueue(): YTQueueItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(LS_YT_QUEUE) || "[]");
+  } catch {
+    return [];
   }
-  return el;
+}
+
+interface LastPlayed {
+  videoId: string;
+  title: string;
+  thumbnail: string;
+}
+
+function loadLastPlayed(): LastPlayed | null {
+  try {
+    return JSON.parse(localStorage.getItem(LS_YT_LAST) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function saveYTQueue(queue: YTQueueItem[]) {
+  try {
+    localStorage.setItem(LS_YT_QUEUE, JSON.stringify(queue));
+  } catch (_) {}
+}
+
+function saveLastPlayed(item: LastPlayed) {
+  try {
+    localStorage.setItem(LS_YT_LAST, JSON.stringify(item));
+  } catch (_) {}
 }
 
 export function useYouTubePlayer(): YouTubePlayerState {
-  const [ytActive, setYtActive] = useState(false);
-  const [ytVideoId, setYtVideoId] = useState<string | null>(null);
-  const [ytTitle, setYtTitle] = useState("");
-  const [ytThumbnail, setYtThumbnail] = useState("");
+  // Restore last played on init (no autoplay)
+  const lastPlayed = loadLastPlayed();
+
+  const [ytActive, setYtActive] = useState(() => !!lastPlayed);
+  const [ytVideoId, setYtVideoId] = useState<string | null>(
+    () => lastPlayed?.videoId ?? null,
+  );
+  const [ytTitle, setYtTitle] = useState(() => lastPlayed?.title ?? "");
+  const [ytThumbnail, setYtThumbnail] = useState(
+    () => lastPlayed?.thumbnail ?? "",
+  );
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.7);
-  const [queue, setQueue] = useState<YTQueueItem[]>([]);
+  const [queue, setQueue] = useState<YTQueueItem[]>(() => loadYTQueue());
 
   const playerRef = useRef<any>(null);
   const playerReadyRef = useRef(false);
-  const pendingVideoRef = useRef<{
-    videoId: string;
-    title: string;
-    thumbnail: string;
-  } | null>(null);
+  const pendingVideoRef = useRef<LastPlayed | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const queueRef = useRef<YTQueueItem[]>([]);
-  const currentVideoIdRef = useRef<string | null>(null);
+  const currentVideoIdRef = useRef<string | null>(lastPlayed?.videoId ?? null);
   const volumeRef = useRef(0.7);
+  // needsLoad: true when a video is set from localStorage restore but not yet
+  // loaded into the YT player (prevents autoplay on refresh)
+  const needsLoadRef = useRef<boolean>(!!lastPlayed);
 
   queueRef.current = queue;
 
@@ -130,6 +162,7 @@ export function useYouTubePlayer(): YouTubePlayerState {
   const loadVideoInternal = useCallback(
     (videoId: string, title: string, thumbnail: string) => {
       currentVideoIdRef.current = videoId;
+      needsLoadRef.current = false; // loading for real, not a restore
       setYtVideoId(videoId);
       setYtTitle(title);
       setYtThumbnail(thumbnail);
@@ -137,6 +170,9 @@ export function useYouTubePlayer(): YouTubePlayerState {
       setProgress(0);
       setCurrentTime(0);
       setDuration(0);
+
+      // Persist last-played
+      saveLastPlayed({ videoId, title, thumbnail });
 
       if (playerReadyRef.current && playerRef.current?.loadVideoById) {
         try {
@@ -152,77 +188,83 @@ export function useYouTubePlayer(): YouTubePlayerState {
   );
 
   useEffect(() => {
-    ensureHiddenDiv();
-
     loadYTScript(() => {
-      if (playerRef.current) return; // Already created
+      if (playerRef.current) return;
 
-      try {
-        const player = new window.YT.Player(HIDDEN_DIV_ID, {
-          width: 1,
-          height: 1,
-          playerVars: {
-            autoplay: 1,
-            controls: 0,
-            disablekb: 1,
-            fs: 0,
-            iv_load_policy: 3,
-            modestbranding: 1,
-            rel: 0,
-            playsinline: 1,
-          },
-          events: {
-            onReady: () => {
-              playerReadyRef.current = true;
-              playerRef.current = player;
-              ytPlayerRef.current = player;
-              try {
-                player.setVolume(volumeRef.current * 100);
-              } catch (_) {}
-              // Play pending video if any
-              if (pendingVideoRef.current) {
-                const { videoId, title, thumbnail } = pendingVideoRef.current;
-                pendingVideoRef.current = null;
-                loadVideoInternal(videoId, title, thumbnail);
-              }
+      // Wait for the mini-player div to be in the DOM
+      const tryInit = () => {
+        const container = document.getElementById(MINI_PLAYER_DIV_ID);
+        if (!container) {
+          // Retry shortly — the React component may not have mounted yet
+          setTimeout(tryInit, 100);
+          return;
+        }
+
+        try {
+          const player = new window.YT.Player(MINI_PLAYER_DIV_ID, {
+            width: "100%",
+            height: "100%",
+            playerVars: {
+              autoplay: 0,
+              controls: 1, // Show YT controls (policy-compliant)
+              modestbranding: 1,
+              rel: 0,
+              playsinline: 1,
             },
-            onStateChange: (event: any) => {
-              const YTState = window.YT?.PlayerState;
-              if (!YTState) return;
-              if (event.data === YTState.PLAYING) {
-                setIsPlaying(true);
-                startPolling();
-              } else if (
-                event.data === YTState.PAUSED ||
-                event.data === YTState.BUFFERING
-              ) {
-                setIsPlaying(false);
-                if (event.data === YTState.PAUSED) stopPolling();
-              } else if (event.data === YTState.ENDED) {
+            events: {
+              onReady: () => {
+                playerReadyRef.current = true;
+                playerRef.current = player;
+                ytPlayerRef.current = player;
+                try {
+                  player.setVolume(volumeRef.current * 100);
+                } catch (_) {}
+                if (pendingVideoRef.current) {
+                  const { videoId, title, thumbnail } = pendingVideoRef.current;
+                  pendingVideoRef.current = null;
+                  loadVideoInternal(videoId, title, thumbnail);
+                }
+              },
+              onStateChange: (event: any) => {
+                const YTState = window.YT?.PlayerState;
+                if (!YTState) return;
+                if (event.data === YTState.PLAYING) {
+                  setIsPlaying(true);
+                  startPolling();
+                } else if (
+                  event.data === YTState.PAUSED ||
+                  event.data === YTState.BUFFERING
+                ) {
+                  setIsPlaying(false);
+                  if (event.data === YTState.PAUSED) stopPolling();
+                } else if (event.data === YTState.ENDED) {
+                  setIsPlaying(false);
+                  stopPolling();
+                  setProgress(1);
+                  const q = queueRef.current;
+                  if (q.length > 0) {
+                    const [next, ...rest] = q;
+                    setQueue(rest);
+                    saveYTQueue(rest);
+                    loadVideoInternal(next.videoId, next.title, next.thumbnail);
+                  }
+                }
+              },
+              onError: (e: any) => {
+                console.warn("[YTPlayer] error:", e.data);
                 setIsPlaying(false);
                 stopPolling();
-                setProgress(1);
-                // Auto-play next in queue
-                const q = queueRef.current;
-                if (q.length > 0) {
-                  const [next, ...rest] = q;
-                  setQueue(rest);
-                  loadVideoInternal(next.videoId, next.title, next.thumbnail);
-                }
-              }
+              },
             },
-            onError: (e: any) => {
-              console.warn("[YTPlayer] error:", e.data);
-              setIsPlaying(false);
-              stopPolling();
-            },
-          },
-        });
-        playerRef.current = player;
-        ytPlayerRef.current = player;
-      } catch (err) {
-        console.warn("[YTPlayer] Failed to create player:", err);
-      }
+          });
+          playerRef.current = player;
+          ytPlayerRef.current = player;
+        } catch (err) {
+          console.warn("[YTPlayer] Failed to create player:", err);
+        }
+      };
+
+      tryInit();
     });
 
     return () => {
@@ -234,6 +276,13 @@ export function useYouTubePlayer(): YouTubePlayerState {
     const p = playerRef.current;
     if (!p) return;
     try {
+      // If this is a restored track that hasn't been loaded yet, load it first
+      if (needsLoadRef.current && currentVideoIdRef.current) {
+        needsLoadRef.current = false;
+        p.loadVideoById(currentVideoIdRef.current);
+        // onStateChange PLAYING will set isPlaying=true
+        return;
+      }
       if (isPlaying) {
         p.pauseVideo();
       } else {
@@ -281,10 +330,18 @@ export function useYouTubePlayer(): YouTubePlayerState {
     setCurrentTime(0);
     setDuration(0);
     stopPolling();
+    needsLoadRef.current = false;
+    try {
+      localStorage.removeItem(LS_YT_LAST);
+    } catch (_) {}
   }, [stopPolling]);
 
   const addToQueue = useCallback((item: YTQueueItem) => {
-    setQueue((prev) => [...prev, item]);
+    setQueue((prev) => {
+      const next = [...prev, item];
+      saveYTQueue(next);
+      return next;
+    });
   }, []);
 
   const nextTrack = useCallback(() => {
@@ -292,12 +349,12 @@ export function useYouTubePlayer(): YouTubePlayerState {
     if (q.length > 0) {
       const [next, ...rest] = q;
       setQueue(rest);
+      saveYTQueue(rest);
       loadVideoInternal(next.videoId, next.title, next.thumbnail);
     }
   }, [loadVideoInternal]);
 
   const prevTrack = useCallback(() => {
-    // Restart current video
     seekTo(0);
   }, [seekTo]);
 
